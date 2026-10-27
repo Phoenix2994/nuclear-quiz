@@ -109,6 +109,7 @@ the game's "creatures" category:
 - **Fallout 76 weak and tough spots are the game's own figures**: the wiki table "Body part multipliers" (page "Fallout 76 combat",
   taken from the game's body part data) is parsed by `fo76_spots` and overrides the hand-written entries (e.g. mirelurk: head x2,
   arms x0.5, shell x0.25; deathclaw: belly x2). Zone names map to roles (head/face -> head, belly/shell/body -> torso, arm/claw -> arms).
+- **Other games, by analogy**: creatures that also exist in Fallout 76 (dog, deathclaw, mirelurk, ghoul, super mutant, mole rat, yao guai, radscorpion, bloatfly, stingwing, radstag, mongrel, mutant hound, brahmin, alien...) get the FO76 multipliers of their species, flagged `derived: weak` and announced in the intro ("estimated from Fallout 76"). Figures found for that very game on the wiki (`creature-weakpoints.json`: FO3 mirelurk and radscorpion, FNV radscorpion and cazador, FO4 deathclaw and mirelurk) override the analogy per zone. Creatures without a FO76 equivalent (ants, mantises, cazador, centaur, gecko, bighorner, cyberdog, spore carrier...) keep the generic model.
 - **FO3, New Vegas and FO4**: no structured public source exists. The real data is the game's *Body Part Data* records
   (per creature: part names, V.A.T.S. hit chance, damage multiplier, cripple threshold), readable only from the game files with
   xEdit / the GECK / Creation Kit. If you can export them (xEdit "Export to JSON" / a BPTD script on `Fallout3.esm`, `FalloutNV.esm`,

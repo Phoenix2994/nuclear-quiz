@@ -86,5 +86,17 @@
    "The cave cricket uses melee attacks and has high Damage Resistance which makes it tough to kill using ballistic weapons, although energy weapons are effective against them."
   ],
   "because": "The wiki has no figure for FO76 creatures; the page says it has high Damage Resistance, so 60% is absorbed."
+ },
+ "Radscorpion (Fallout: New Vegas)": {
+  "mult": {
+   "head": 1.0,
+   "legs": 0.5,
+   "arms": 1.0
+  },
+  "notes": [
+   "Unlike other creatures, radscorpions lack a \"weak point\" that can be targeted for extra damage (they have no \"head,\" for example), which makes V.A.T.S. combat and firearms somewhat less effective against them.",
+   "Radscorpions take normal damage when shot in the torso, stinger, or claws, and reduced damage when shot in the legs."
+  ],
+  "because": "No weak point (head x1.0), normal damage on torso, stinger and claws (x1.0), reduced damage on the legs (x0.5)."
  }
 }

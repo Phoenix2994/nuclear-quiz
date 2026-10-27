@@ -142,6 +142,8 @@ def notes_of(text):
 
 
 FO76_NAMES = {"Mongrel": "Wild mongrel", "Mole miner": "Mole miner", "Super mutant behemoth": "Super mutant behemoth"}
+# the same species in the other games, matched to its Fallout 76 row (the figures are applied by analogy, not read from that game)
+ANALOGUE = {"Coyote": "Dog", "Radrat": "Mole rat", "Giant rat": "Mole rat", "Glowing one": "Feral ghoul", "Giant mantis": None}
 SPOT_ROLE = [(r"^(head|face|left head|right head|combat inhibitor)", "head"), (r"^(belly|body|shell)", "torso"), (r"^(arm|claw)", "arms"), (r"^leg", "legs")]
 
 
@@ -286,6 +288,15 @@ def main():
                 derived.append("dmg")
             wp = dict(weakpoints.get(t, {}))
             sp = spots76.get(FO76_NAMES.get(name, name)) if g == "fo76" else None
+            if not sp and g != "fo76":  # same species in Fallout 76: by analogy, flagged as an estimate; this game's own data wins
+                alt = spots76.get(FO76_NAMES.get(ANALOGUE.get(name, name), ANALOGUE.get(name, name)) or "")
+                if alt:
+                    own = wp.get("mult", {})
+                    wp["mult"] = {**{r: m for r, (m, _) in alt.items()}, **own}
+                    est = ", ".join(f"{lab} x{m:g}" for r, (m, lab) in alt.items() if r not in own)
+                    wp["because"] = " ".join(x for x in (wp.get("because"), f"Estimated from the same species in Fallout 76 (wiki table): {est}." if est else "") if x)
+                    if est:
+                        derived.append("weak")
             if sp:  # the game's own figures beat anything hand-written
                 wp["mult"] = {r: m for r, (m, _) in sp.items()}
                 wp["because"] = "Fallout 76 wiki table of body part multipliers: " + ", ".join(f"{lab} x{m:g}" for _, (m, lab) in sp.items())
