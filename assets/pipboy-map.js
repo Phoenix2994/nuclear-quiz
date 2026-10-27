@@ -237,7 +237,8 @@ export function createMapTab({ React, useStore, useI18n, sound }) {
       }),
       h("text", {
         x: target.x, y: target.y > view.y + view.w * 0.2 ? target.y - map.hit - 6 : target.y + map.hit + 20,
-        textAnchor: "middle", className: "pm-label", style: { fontSize: Math.max(10, view.w * 0.034) },
+        textAnchor: target.x < view.x + view.w * 0.25 ? "start" : target.x > view.x + view.w * 0.75 ? "end" : "middle",
+        className: "pm-label", style: { fontSize: Math.max(10, view.w * 0.034) },
       }, clean(target.name)));
 
     const wikiUrl = WIKI + encodeURIComponent(target.page.replace(/ /g, "_")).replace(/%2F/g, "/");
