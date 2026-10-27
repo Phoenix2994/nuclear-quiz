@@ -1,0 +1,38 @@
+Creatures with no known weak points (no wiki figure for the game, no Fallout 76 analogue): left out of the fights.
+Add them to tools/sources/creature-weakpoints.json (role -> damage multiplier: head, torso, arms, legs) and rebuild.
+
+Fallout 3 creatures (5):
+  - Abomination (Mothership Zeta)
+  - Centaur (Fallout 3)
+  - Fire ant (Fallout 3)
+  - Giant ant (Fallout 3)
+  - Radroach (Fallout 3)
+
+Fallout: New Vegas creatures (13):
+  - Abomination (Fallout: New Vegas)
+  - Bark scorpion
+  - Bighorner
+  - Centaur (Fallout: New Vegas)
+  - Cyberdog (Fallout: New Vegas)
+  - Fire ant (Fallout: New Vegas)
+  - Gecko (Fallout: New Vegas)
+  - Giant ant (Fallout: New Vegas)
+  - Giant mantis (Fallout: New Vegas)
+  - Lakelurk
+  - Radroach (Fallout: New Vegas)
+  - Spore carrier
+  - Spore plant (Fallout: New Vegas)
+
+Fallout 4 creatures (2):
+  - Radgull
+  - Radroach (Fallout 4)
+
+Fallout 76 creatures (7):
+  - Cave cricket (Fallout 76)
+  - Floater (Fallout 76)
+  - Mirelurk spawn (Fallout 76)
+  - Rabbit
+  - Radrat (Fallout 76)
+  - Radtoad (Fallout 76)
+  - Visitor
+

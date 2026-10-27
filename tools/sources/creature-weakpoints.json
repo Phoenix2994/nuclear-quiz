@@ -1,0 +1,102 @@
+{
+ "Mirelurk (Fallout 3)": {
+  "mult": {
+   "torso": 0.5
+  },
+  "acc": {
+   "head": -10
+  },
+  "notes": [
+   "The face, however, is unarmored but presents a small target.",
+   "All mirelurks, except for kings, are protected by a thick shell that is difficult to penetrate, even with powerful ballistic weapons such as the Gauss rifle."
+  ],
+  "because": "Shell protects the body (torso x0.5); the face is unarmored but a small target (head accuracy -10); extremities are more vulnerable than the body."
+ },
+ "Mirelurk (Fallout 4)": {
+  "mult": {
+   "torso": 0.6
+  },
+  "acc": {
+   "head": -10
+  },
+  "notes": [
+   "The face is unarmored but a small target, and when charging a mirelurk will often lower its head to protect this area."
+  ],
+  "because": "Only the face is described as unarmored, so the rest (torso) is treated as armored (x0.6)."
+ },
+ "Radscorpion (Fallout 3)": {
+  "mult": {
+   "head": 1.0,
+   "legs": 0.4
+  },
+  "notes": [
+   "Unlike other creatures, radscorpions lack a \"weak point\" that can be targeted for extra damage (such as a \"head\" for a headshot), which makes V.A.T.S. combat and firearms somewhat less effective against them.",
+   "Radscorpions also take significantly reduced damage from any shots that hit their legs, meaning that even a Critical Hit from a high-powered weapon will only do minor damage."
+  ],
+  "because": "No weak point (head x1.0) and much reduced damage on the legs (x0.4)."
+ },
+ "Cazador": {
+  "mult": {
+   "head": 1.0
+  },
+  "notes": [
+   "They do not take extra damage from shots to the head.",
+   "Crippling a wing via V.A.T.S. greatly slows them down and also temporarily disables their ability to fly."
+  ],
+  "because": "No extra damage from head shots (head x1.0)."
+ },
+ "Deathclaw (Fallout 4)": {
+  "mult": {
+   "torso": 1.6,
+   "head": 0.6,
+   "arms": 0.6,
+   "legs": 0.6
+  },
+  "acc": {
+   "torso": -15
+  },
+  "notes": [
+   "The deathclaws have a substantial level of natural armor and are resistant to damage on their dark, scaled parts, leaving the belly as a weak spot that takes increased damage.",
+   "Deathclaws will charge the target while defending their weak belly with their head, making it difficult to land a shot to the weak spot even in V.A.T.S."
+  ],
+  "because": "Scaled parts resist (x0.6), the belly (torso) takes increased damage (x1.6) but is hard to hit (accuracy -15)."
+ },
+ "Mirelurk queen (Fallout 76)": {
+  "mult": {
+   "torso": 0.6,
+   "legs": 1.2
+  },
+  "notes": [
+   "Her high armor and HP can make her a tough enemy for most player characters, but she is vulnerable in her head, spouts and legs."
+  ],
+  "because": "High armor (torso x0.6) but vulnerable in head and legs (legs x1.2; the head already takes double damage)."
+ },
+ "Mirelurk hunter (Fallout 76)": {
+  "mult": {
+   "head": 1.0
+  },
+  "notes": [
+   "The lack of a hardened carapace means that they have slightly less concentrated armor protection, however, they have superb overall protection, meaning they are not nearly as vulnerable to headshots."
+  ],
+  "because": "Not nearly as vulnerable to headshots (head x1.0)."
+ },
+ "Cave cricket (Fallout 76)": {
+  "absorb": 0.6,
+  "notes": [
+   "The cave cricket uses melee attacks and has high Damage Resistance which makes it tough to kill using ballistic weapons, although energy weapons are effective against them."
+  ],
+  "because": "The wiki has no figure for FO76 creatures; the page says it has high Damage Resistance, so 60% is absorbed."
+ },
+ "Radscorpion (Fallout: New Vegas)": {
+  "mult": {
+   "head": 1.0,
+   "legs": 0.5,
+   "arms": 1.0
+  },
+  "notes": [
+   "Unlike other creatures, radscorpions lack a \"weak point\" that can be targeted for extra damage (they have no \"head,\" for example), which makes V.A.T.S. combat and firearms somewhat less effective against them.",
+   "Radscorpions take normal damage when shot in the torso, stinger, or claws, and reduced damage when shot in the legs."
+  ],
+  "because": "No weak point (head x1.0), normal damage on torso, stinger and claws (x1.0), reduced damage on the legs (x0.5)."
+ }
+}

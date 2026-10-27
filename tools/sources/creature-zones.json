@@ -1,0 +1,38 @@
+{
+ "Bloatfly (Fallout 3)": {
+  "body": "flyer"
+ },
+ "Bloatfly (Fallout: New Vegas)": {
+  "body": "flyer"
+ },
+ "Deathclaw (Fallout 3)": {
+  "body": "humanoid"
+ },
+ "Deathclaw (Fallout: New Vegas)": {
+  "body": "humanoid"
+ },
+ "Deathclaw (Fallout 4)": {
+  "mirror": true
+ },
+ "Mole rat (Fallout 3)": {
+  "mirror": false
+ },
+ "Mole rat (Fallout: New Vegas)": {
+  "mirror": false
+ },
+ "Mole rat (Fallout 4)": {
+  "mirror": true
+ },
+ "Cazador": {
+  "body": "flyer"
+ },
+ "Bloodbug (Fallout 76)": {
+  "body": "flyer"
+ },
+ "Mutant hound (Fallout 4)": {
+  "mirror": false
+ },
+ "Mutant hound (Fallout 76)": {
+  "mirror": false
+ }
+}
