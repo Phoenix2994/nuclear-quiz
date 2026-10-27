@@ -19,14 +19,17 @@ dropping the bundle patch.
 
 ## Integration in the original sources (4 changes)
 
-The module exports `createMapTab({ React, useStore, useI18n, sound })` and returns the `MapTab` component.
-In the compiled bundle the arguments are `P` (React), `Ut` (store hook), `kn` (i18n hook, returns `{ lang, t }`)
-and `eo` (sound player: `"right"`, `"wrong"`…). In the sources use the real names.
+The module exports `createMapTab({ React, useStore, useI18n, sound, Quiz })` and returns the `MapTab` component.
+In the compiled bundle the arguments are `P` (React), `Ut` (store hook), `kn` (i18n hook, returns `{ lang, t }`),
+`eo` (sound player: `"right"`, `"wrong"`, `"caps"`) and `Gc` (the app's quiz-session component, props
+`{ title, questions, onExit, onFinish({correct,total,xp}) }`, used for the missions of the discovery mode).
+In the sources use the real names. From the store the module uses `answer`, `completeSession`, `questions`
+(already filtered by quiz language) and `progress.seen`.
 
 1. **Tab.** Create the component once and add a `map` tab next to quiz/radio/data/stat (the real Pip-Boy order
    is STAT INV DATA MAP RADIO, here it sits between DATA and STAT):
    ```js
-   const MapTab = createMapTab({ React, useStore, useI18n, sound: playSound });
+   const MapTab = createMapTab({ React, useStore, useI18n, sound: playSound, Quiz: QuizSession });
    // tabs: { key: "map", label: "MAP" }   ...   {tab === "map" && <MapTab />}
    ```
 2. **Answer reducer** (the function that records an answer in the store; `Rp` in the bundle). Map questions
@@ -51,6 +54,21 @@ Perception (S.P.E.C.I.A.L.) point work like any other quiz. `store.completeSessi
 - the two reducer tweaks above (`Rp`);
 - `index.html` links `assets/pipboy-map.css`.
 
+## Modes (MAP tab)
+
+| Mode | What it does |
+|---|---|
+| Find the place | 10 rounds: tap the named place. Points by distance (100 within half the hit radius, then linear to 0 at 7.5x); counts as correct, for XP, within the hit radius. Best score per map is kept. |
+| Which place is this? | A place is highlighted, pick its name among 4 (distractors: same category / nearby). |
+| Discover the map | Fog of war. Starts at the game's first vault (`start` in `data/maps.json`, table `START` in the build script). The 4 nearest undiscovered places appear as "?" markers; pick one and "travel": a 3-question mission built from the app's own questions for that game (unseen first). 2 of 3 correct discovers the place and lifts the fog around it; otherwise try again. Progress is saved per map. |
+| Explorer | Browse freely; tap an icon for name, type and wiki link; highlight a category. |
+| Which icon is this? | A zoomed icon is circled, pick the kind of place (only generic categories, never a place's own name). Not offered for FO76 (its icons are pictures, not glyphs). |
+
+Categories that are a place's own name (Diamond City, Castle…) are never shown as a hint (`isGeneric`).
+
+Own persistence: discovered places and best scores live in `localStorage` key `wasteland-quiz-map-v1`, outside the app
+store (the app's "reset progress" does not clear it). In the real sources move them into the store/progress object.
+
 ## How the quiz works
 
 - `data/maps.json` → `{ <mapKey>: { label, group, short, image, hit, bbox, icons, cats, markers, targets } }`.
@@ -62,7 +80,7 @@ Perception (S.P.E.C.I.A.L.) point work like any other quiz. `store.completeSessi
   (notable locations, see `tools/build_maps.py`: major categories, markers alone in their category,
   markers that have an entry in `data/articles.json`; the DLC maps ask every marker; FO3/FNV locations that the wiki's
   "Fallout 3 locations" / "Fallout: New Vegas locations" lists show in italic, i.e. not marked on the Pip-Boy, are never asked). `hit` is the tap tolerance in map units.
-- 10 random targets per session; a tap within `hit` of the target is correct. Tapping another marker
+- Find mode: 10 random targets per session; a tap within `hit` of the target is correct. Tapping another marker
   names it in the feedback.
 - FO4, FO76 and the two main maps of FO3 and New Vegas are the real in-game maps with their icons already drawn in:
   nothing is overlaid. FO3 and FNV use the screenshots in `tools/sources/` (provided by the project owner; FNV is the
@@ -94,6 +112,9 @@ python3 tools/build_maps.py          # regenerate data + images (cache in .map-c
   The wiki location lists contain neither icons nor coordinates (fallout.wiki blocks scripted downloads).
 - The FO76 map shows the Mappalachia watermark at the bottom of the image (credited in README).
 - The zoom buttons sit over the top-right corner of the map; a target there needs a pan first.
+- Discovery: daily "luogo del giorno", a unified map-progress screen, a bonus for completing a map, reveal radius per map
+  (`radius` in `Discover`, now 105 / 130 for DLC), mission length (`MISSION_QUESTIONS`, `MISSION_PASS`).
+- Add an automatic test for the discovery progress persistence (`tools/smoke_map.mjs` covers the happy path).
 
 ## Credits and licence
 

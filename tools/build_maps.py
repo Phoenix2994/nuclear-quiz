@@ -33,6 +33,12 @@ BAKED = {
     "fnv": {"file": "tools/sources/fnv-pipboy-map.jpg", "size": None, "align": (1.0, 1.004, -1.0, -5.9), "min_lum": 150},
 }
 GROUP_COLOR = {"fo3": (110, 255, 130), "fnv": (255, 186, 96)}  # glyph / tint colour of the maps without baked icons
+# Where the "discover the map" mode starts (marker name): the game's starting vault or town, or the DLC entry point
+START = {
+    "fo3": "Vault 101", "fo3pl": "The Ark & Dove Cathedral", "fo3tp": "The Pitt train yard", "fo3oa": "U.S. Army field headquarters",
+    "fnv": "Goodsprings", "fnvhh": "Southern Passage", "fnvlr": "Junction 7 rest stop", "fnvowb": "Signal Hills transmitter",
+    "fo4": "Vault 111", "fo76": "Vault 76",
+}
 # Wiki location lists: locations in italic there are not marked on the Pip-Boy, so they are never asked
 LOCATION_LISTS = {"fo3": "Fallout 3 locations", "fnv": "Fallout: New Vegas locations"}
 SKIP_CATS = {"Unmarked", "Bobbleheads", "Pond/Lake", "Water bodies", "Wooded areas", "Quarry", "Mines"}
@@ -271,8 +277,9 @@ def main():
         xs = [k["x"] for k in markers]; ys = [k["y"] for k in markers]
         pad = 50 if g in ("fo3", "fnv", "fo4") else 90
         bbox = [0, 0, 1000, 1000] if g == "fo76" else [max(0, min(xs) - pad), max(0, min(ys) - pad), min(1000, max(xs) + pad), min(1000, max(ys) + pad)]
+        start = next(k["id"] for k in markers if k["name"].strip() == START[g])
         out[g] = {
-            "label": label, "group": group, "short": short, "image": dst, "hit": hit, "bbox": [round(v) for v in bbox], "icons": icons,
+            "start": start, "label": label, "group": group, "short": short, "image": dst, "hit": hit, "bbox": [round(v) for v in bbox], "icons": icons,
             "cats": {c["id"]: c["name"] for c in m["categories"]},
             "markers": [{k: v for k, v in mk.items() if k != "cid"} | {"c": mk["cid"]} for mk in markers],
             "targets": targets,

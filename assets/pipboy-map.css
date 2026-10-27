@@ -18,3 +18,23 @@
 .pm-zoom .sqbtn{width:36px;height:36px;font-size:20px;background:#0a1a0aee}
 @keyframes pm-pulse{0%{transform:scale(.6);opacity:1}100%{transform:scale(2);opacity:0}}
 @media (prefers-reduced-motion:reduce){.pm-pulse{animation:none}}
+
+/* modes */
+.pm-preview{border-radius:4px;overflow:hidden;background:#020a04}
+.pm-preview .pm-svg{max-height:34vh;margin:0 auto}
+.pm-row-text{display:flex;flex-direction:column;flex:1;min-width:0;gap:2px}
+.pm-row-text small{font-size:11px;white-space:normal;line-height:1.25}
+.pm-ring-q{fill:none;stroke:var(--warn)}
+.pm-hl{fill:none;stroke:var(--warn);stroke-width:2;vector-effect:non-scaling-stroke}
+.pm-record{color:var(--warn);font-size:18px;margin-top:6px;letter-spacing:.1em;text-shadow:none}
+.pm-chip-label{align-self:center;font-size:12px;white-space:nowrap}
+/* discover the map */
+.pm-fog-rect{fill:#010603;fill-opacity:.94;pointer-events:none}
+.pm-fr-ring{fill:rgba(255,179,71,.12);stroke:var(--warn);stroke-width:2;stroke-dasharray:5 4;vector-effect:non-scaling-stroke;animation:pm-blink 1.4s ease-in-out infinite}
+.pm-fr-q{fill:var(--warn);font-family:var(--font);font-weight:700;text-shadow:none;pointer-events:none}
+.pm-frontier.on .pm-fr-ring{fill:rgba(255,179,71,.3);stroke-dasharray:none;stroke-width:3;animation:none}
+.pm-dest{display:flex;flex-direction:column;gap:8px;border:1px solid var(--warn);border-radius:4px;padding:10px 12px}
+.pm-dest p{margin:2px 0 0}
+.pm-restart{border-color:var(--fg-dim);color:var(--fg-dim);padding:10px;font-size:13px}
+@keyframes pm-blink{0%,100%{opacity:1}50%{opacity:.45}}
+@media (prefers-reduced-motion:reduce){.pm-fr-ring{animation:none}}
