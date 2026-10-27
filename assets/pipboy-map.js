@@ -1,7 +1,7 @@
 // Map quizzes for Fallout 3, New Vegas, 4 and 76 (plus the DLC maps).
 //
 // Modes: find the place (scored by distance), which place is this, discover the map (fog of war that lifts as you
-// complete quiz missions, starting from the game's first vault), explorer, which icon is this.
+// complete quiz missions, starting from the game's first vault, with health, stimpaks and caps carried along), explorer.
 //
 // Plain ES module (no build step). It is wired into the compiled bundle through createMapTab(), which receives the
 // bundle's React, store hook, i18n hook, sound player and the app's quiz-session component.
@@ -43,11 +43,16 @@ const TEXT = {
     cFight: "COMBATTI", cFlee: "FUGGI", cFleeWhy: "La creatura è più veloce di te: non puoi seminarla.", cFleeChance: "probabilità di fuga",
     cAim: "Scegli dove colpire", cAp: "PA", cHp: "PS", cCrit: "CRITICO", cCritArmed: "CRITICO PRONTO", cExec: "ESEGUI", cUndo: "ANNULLA",
     cMiss: "MANCATO", cCrippled: "STORPIATO", cCreatureTurn: "La creatura attacca!", cHitYou: "ti colpisce", cMissYou: "ti manca",
-    cWin: "CREATURA SCONFITTA", cWinSub: "Ora puoi esplorare il luogo: rispondi al quiz.", cLose: "SEI STATO SCONFITTO", cLoseSub: "Ti ritiri per curarti. Riprova.",
+    cWin: "CREATURA SCONFITTA", cWinSub: "Ora puoi esplorare il luogo: rispondi al quiz.", cLose: "SEI STATO SCONFITTO", cLoseSub: "Perdi parte dei tappi e torni all'ultimo insediamento.",
     cFled: "SEI FUGGITO", cFledSub: "Sei scappato dalla creatura.", cFleeFail: "Fuga fallita!", cShot: "colpo", cQueue: "In coda", cYouHit: "Colpito", cCont: "CONTINUA",
     cDmg: "Danno", cResist: "Resistenza ai danni", cWeak: "PUNTI DEBOLI E RESISTENZE", cEst: "* stimato: il wiki non riporta il valore", cEstWeak: "Punti deboli stimati dalla stessa specie in Fallout 76 (dati del gioco)",
     pickDest: "Tocca una destinazione per scegliere dove andare.",
     defeatNote: "Sconfitto da", fledNote: "Sei fuggito da", critHint: "Si carica a ogni colpo (più in fretta con la Fortuna): il colpo critico colpisce sempre e fa doppio danno.",
+    aHp: "PS", aStim: "Stimpak", aCaps: "tappi", aAt: "Sei a", camp: "INSEDIAMENTO", campVault: "RIFUGIO",
+    aRest: "RIPOSA", aRestFree: "gratis", aBuy: "COMPRA STIMPAK", aFast: "VIAGGIO RAPIDO", aFull: "PS al massimo",
+    aGotCaps: "tappi", aGotStim: "Hai trovato uno stimpak", aLost: "tappi persi", aBack: "Ti risvegli a",
+    aRested: "Hai riposato: PS al massimo.", aBought: "Stimpak acquistato.", aNoEncounter: "Il viaggio è tranquillo: nessuna creatura.",
+    cStim: "STIMPAK", cHealed: "Stimpak: +",
     credit: "Mappe e posizioni: Fallout Wiki (CC BY-SA 3.0). Immagini di proprietà dei rispettivi titolari.",
     credit76: " Mappa di Fallout 76: Mappalachia.",
   },
@@ -75,11 +80,16 @@ const TEXT = {
     cFight: "FIGHT", cFlee: "FLEE", cFleeWhy: "The creature is faster than you: you cannot outrun it.", cFleeChance: "chance to escape",
     cAim: "Choose where to hit", cAp: "AP", cHp: "HP", cCrit: "CRITICAL", cCritArmed: "CRITICAL READY", cExec: "EXECUTE", cUndo: "UNDO",
     cMiss: "MISS", cCrippled: "CRIPPLED", cCreatureTurn: "The creature attacks!", cHitYou: "hits you", cMissYou: "misses you",
-    cWin: "CREATURE DEFEATED", cWinSub: "Now you can explore the place: answer the quiz.", cLose: "YOU WERE DEFEATED", cLoseSub: "You retreat to heal. Try again.",
+    cWin: "CREATURE DEFEATED", cWinSub: "Now you can explore the place: answer the quiz.", cLose: "YOU WERE DEFEATED", cLoseSub: "You lose some caps and go back to the last settlement.",
     cFled: "YOU ESCAPED", cFledSub: "You got away from the creature.", cFleeFail: "Escape failed!", cShot: "shot", cQueue: "Queued", cYouHit: "Hit", cCont: "CONTINUE",
     cDmg: "Damage", cResist: "Damage resistance", cWeak: "WEAK POINTS AND RESISTANCES", cEst: "* estimated: the wiki gives no figure", cEstWeak: "Weak points estimated from the same species in Fallout 76 (game data)",
     pickDest: "Tap a destination to pick where to go.",
     defeatNote: "Defeated by", fledNote: "You escaped from", critHint: "It charges with every shot (faster with Luck): a critical shot always hits and does double damage.",
+    aHp: "HP", aStim: "Stimpaks", aCaps: "caps", aAt: "You are at", camp: "SETTLEMENT", campVault: "SHELTER",
+    aRest: "REST", aRestFree: "free", aBuy: "BUY STIMPAK", aFast: "FAST TRAVEL", aFull: "HP full",
+    aGotCaps: "caps", aGotStim: "You found a stimpak", aLost: "caps lost", aBack: "You wake up at",
+    aRested: "You rested: HP full.", aBought: "Stimpak bought.", aNoEncounter: "A quiet trip: no creature.",
+    cStim: "STIMPAK", cHealed: "Stimpak: +",
     credit: "Maps and positions: Fallout Wiki (CC BY-SA 3.0). Images belong to their respective owners.",
     credit76: " Fallout 76 map: Mappalachia.",
   },
@@ -135,13 +145,13 @@ function shuffle(a) {
   return a;
 }
 
-// ---- own persistence (discovered places, best scores). Not part of the app store: see HANDOFF.md.
+// ---- own persistence (discovered places, best scores, adventure state per map). Not part of the app store: see HANDOFF.md.
 
 function loadSaved() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY) ?? "{}");
-    return { discovered: s.discovered ?? {}, best: s.best ?? {} };
-  } catch { return { discovered: {}, best: {} }; }
+    return { discovered: s.discovered ?? {}, best: s.best ?? {}, adv: s.adv ?? {} };
+  } catch { return { discovered: {}, best: {}, adv: {} }; }
 }
 function saveSaved(s) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch { /* private mode */ }
@@ -202,7 +212,8 @@ export function zonesFor(creature) {
 // so they apply to any body template
 const roleOf = (z) => (z.key === "head" ? "head" : z.key === "torso" ? "torso" : z.effect === "weak" ? "arms" : z.effect === "slow" ? "legs" : null);
 
-export function newFight(creature, player) {
+// hp / stim: what the player brings from the map (the adventure); full health and no stimpaks when left out
+export function newFight(creature, player, hp, stim = 0) {
   const level = creature.level;
   const hpMax = Math.min(600, creature.hp ?? 8 + 10 * level);
   const parts = zonesFor(creature).map((z) => {
@@ -211,7 +222,7 @@ export function newFight(creature, player) {
   });
   const dmg = Math.max(creature.dmg ?? 0, Math.round(2 + 1.5 * level)); // creatures that fight with weapons have a tiny melee figure
   return { c: { name: creature.name, level, hpMax, hp: hpMax, dmg, absorb: creature.absorb ?? 0, speed: creature.speed, parts },
-    p: { ...player, hp: player.hpMax, ap: player.apMax, crit: 0 }, round: 1 };
+    p: { ...player, hp: clamp(hp ?? player.hpMax, 1, player.hpMax), stim, ap: player.apMax, crit: 0 }, round: 1 };
 }
 
 const effects = (c) => ({
@@ -266,6 +277,48 @@ export function fleeInfo(f) {
   return { allowed, chance: blind ? 85 : clamp(60 + 10 * (mine - theirs), 20, 95), reason: allowed ? "" : "faster", mine, theirs };
 }
 export const tryFlee = (f, rnd) => rnd() * 100 < fleeInfo(f).chance;
+
+// ---- adventure (discovery mode): health, stimpaks, caps and position carried from one mission to the next, saved per map.
+// Pure functions on a plain state { hp, stim, caps, at, safe }: at = place you are in, safe = last settlement visited.
+export const ADV = {
+  stim: 2, maxStim: 10, caps: 20, capsPerPlace: 5, // start; capsPerPlace: for places discovered before the adventure existed
+  encounter: 0.75, // chance that a creature blocks the way on a trip
+  heal: 0.4, // a stimpak heals this share of max health, for the action points of one shot
+  foundCaps: 10, stimFind: 0.25, // reward of a discovered place, chance of finding a stimpak there
+  defeatLoss: 0.25, // share of the caps lost when defeated (you wake up at the last settlement with half health)
+  rest: 10, stimPrice: 25, // settlement prices; resting in the starting vault is free
+};
+export const winCaps = (level, r) => Math.round((5 + 3 * level) * (0.8 + 0.4 * r));
+export const newAdventure = (hpMax, start, discovered = 0) =>
+  ({ hp: hpMax, stim: ADV.stim, caps: ADV.caps + ADV.capsPerPlace * discovered, at: start, safe: start });
+// the result of a fight: hp and stim are what the player has left at the end of it
+export function advAfterFight(a, { result, hp, stim, level }, hpMax, rnd) {
+  if (result === "win") { const gain = winCaps(level, rnd()); return { a: { ...a, hp, stim, caps: a.caps + gain }, gain }; }
+  if (result === "lose") {
+    const loss = Math.floor(a.caps * ADV.defeatLoss);
+    return { a: { ...a, hp: Math.ceil(hpMax / 2), stim, caps: a.caps - loss, at: a.safe }, loss };
+  }
+  return { a: { ...a, hp: Math.max(1, hp), stim } }; // fled or left the fight
+}
+export function advAfterDiscover(a, placeId, isSafe, rnd) {
+  const stim = a.stim < ADV.maxStim && rnd() < ADV.stimFind ? 1 : 0;
+  return { a: { ...a, caps: a.caps + ADV.foundCaps, stim: a.stim + stim, at: placeId, safe: isSafe ? placeId : a.safe }, caps: ADV.foundCaps, stim };
+}
+export const restCost = (a, start) => (a.at === start ? 0 : ADV.rest);
+export const canRest = (a, hpMax, start) => a.hp < hpMax && a.caps >= restCost(a, start);
+export const rest = (a, hpMax, start) => (canRest(a, hpMax, start) ? { ...a, hp: hpMax, caps: a.caps - restCost(a, start) } : a);
+export const canBuy = (a) => a.caps >= ADV.stimPrice && a.stim < ADV.maxStim;
+export const buyStim = (a) => (canBuy(a) ? { ...a, stim: a.stim + 1, caps: a.caps - ADV.stimPrice } : a);
+export const fastTravel = (a, placeId) => ({ ...a, at: placeId, safe: placeId });
+// a stimpak in a fight: heals at once and costs the action points of one shot
+export function useStimpak(f) {
+  const heal = Math.min(f.p.hpMax - f.p.hp, Math.round(ADV.heal * f.p.hpMax));
+  f.p.hp += heal; f.p.stim -= 1; f.p.ap -= f.p.cost;
+  return { heal };
+}
+// settlements: where you can rest, buy stimpaks and fast travel to (plus the starting vault)
+const SAFE_CAT = /settlement|^\s*(city|cities|towns?|diamond city|goodneighbor|sanctuary hills)\s*$/i;
+export const isSafePlace = (map, m) => Boolean(m) && (m.id === map.start || SAFE_CAT.test(m.cat));
 
 // which creature meets you: the more of the map is discovered, the higher the level of the creatures that can show up
 export function pickCreature(pool, discovered, rnd = Math.random, forced = {}) {
@@ -671,6 +724,10 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
   // ---- the fight: creature appears, fight or flee, V.A.T.S.-style aiming, then the result
 
   const copy = (x) => JSON.parse(JSON.stringify(x));
+  const playerOf = (store) => {
+    const p = playerFrom(store.progress, stats);
+    return testHook().invincible ? { ...p, hpMax: 99999 } : p; // test hook only
+  };
 
   // the part's rectangle as a soft-edged mask (two gradients intersected), so the glow fades out instead of ending on a straight cut
   function featherMask(x, y, w, hh) {
@@ -699,13 +756,12 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     return items;
   }
 
-  function Encounter({ creature, lang, store, onResult }) {
+  // hp / stim: what the player brings from the map; onResult(result, { hp, stim }) gives back what is left
+  function Encounter({ creature, lang, store, onResult, hp, stim }) {
     const T = TEXT[lang] ?? TEXT.en;
-    const player = useMemo(() => {
-      const p = playerFrom(store.progress, stats);
-      return testHook().invincible ? { ...p, hpMax: 99999 } : p; // test hook only
-    }, []);
-    const [f, setF] = useState(() => newFight(creature, player));
+    const player = useMemo(() => playerOf(store), []);
+    const [f, setF] = useState(() => newFight(creature, player, testHook().invincible ? undefined : hp, stim));
+    const done = (result) => onResult(result, { hp: f.p.hp, stim: f.p.stim });
     const level = creature.level;
     const [phase, setPhase] = useState("intro"); // intro | aim | exec | win | lose | fled
     const [queue, setQueue] = useState([]); // [{ part, crit }]
@@ -722,7 +778,10 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const apLeft = f.p.ap - queue.length * f.p.cost;
     const info = fleeInfo(f);
     const speedNow = creatureSpeed(f.c);
+    const stimQueued = queue.filter((q) => q.stim).length;
+    const canStim = phase === "aim" && apLeft >= f.p.cost && stimQueued < f.p.stim && f.p.hp < f.p.hpMax;
     const predicted = queue.reduce((sum, q) => {
+      if (q.stim) return sum;
       const part = f.c.parts.find((x) => x.key === q.part);
       return sum + Math.round(f.p.dmg * part.mult * (q.crit ? 2 : 1 - f.c.absorb));
     }, 0);
@@ -733,6 +792,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       setQueue((q) => [...q, { part: partKey, crit }]);
       if (crit) setArmed(false);
     }
+    function addStim() { if (canStim) setQueue((q) => [...q, { stim: true }]); }
     function undo() { setQueue((q) => { const last = q[q.length - 1]; if (last?.crit) setArmed(true); return q.slice(0, -1); }); }
 
     async function creatureAttacks(st) {
@@ -751,6 +811,13 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       const st = copy(f), shots = queue;
       setPhase("exec"); setQueue([]); setArmed(false);
       for (const shot of shots) {
+        if (shot.stim) {
+          const { heal } = useStimpak(st);
+          setF(copy(st)); say(`${T.cHealed}${heal} ${T.cHp}`);
+          await sleep(600);
+          if (!alive.current) return;
+          continue;
+        }
         const r = playerShot(st, shot.part, shot.crit, rng);
         setF(copy(st)); setFlash(r);
         const label = st.c.parts.find((x) => x.key === shot.part).label[lang] ?? "";
@@ -845,7 +912,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
         h("div", { className: "topbar" }, h("span", { className: "muted" }, T.cBlocks)),
         header, stage,
         h("div", { className: "feedback " + kind[2] }, h("strong", null, T[kind[0]]), h("p", null, T[kind[1]]),
-          h("button", { className: "btn primary", onClick: () => onResult(phase === "win" ? "win" : phase === "lose" ? "lose" : "flee") }, T.cCont)));
+          h("button", { className: "btn primary", onClick: () => done(phase === "win" ? "win" : phase === "lose" ? "lose" : "flee") }, T.cCont)));
     }
 
     const meter = h("div", { className: "vats-meter" },
@@ -859,13 +926,14 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     if (phase === "intro") {
       return h("div", { className: "screen quiz vats" },
         h("div", { className: "topbar" },
-          h("button", { className: "link", onClick: () => onResult("abort"), "aria-label": T.close }, "✕"),
+          h("button", { className: "link", onClick: () => done("abort"), "aria-label": T.close }, "✕"),
           h("span", { className: "muted" }, T.cBlocks), h("span", null)),
         header, stage,
         h("div", { className: "vats-hp" }, bar("enemy", f.c.hp, f.c.hpMax), h("em", null, `${f.c.hp}/${f.c.hpMax}${creature.derived?.includes("hp") ? "*" : ""}`)),
         h("div", { className: "vats-stats" },
           h("span", null, `${T.cDmg}: ${f.c.dmg}${creature.derived?.includes("dmg") ? "*" : ""}`),
           f.c.absorb > 0 && h("span", null, `${T.cResist}: ${Math.round(f.c.absorb * 100)}%`)),
+        h("div", { className: "vats-me" }, h("span", { className: "muted" }, T.cHp), bar("me", f.p.hp, f.p.hpMax), h("em", null, `${f.p.hp}/${f.p.hpMax}`)),
         creature.notes?.length ? h("div", { className: "pm-fact vats-notes" }, h("strong", null, T.cWeak),
           creature.notes.map((n, i) => h("p", { key: i }, n[lang] ?? n.en))) : null,
         creature.derived?.some((x) => x === "hp" || x === "dmg") && h("p", { className: "muted vats-est" }, T.cEst),
@@ -878,7 +946,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
 
     return h("div", { className: "screen quiz vats" + (hurt ? " hurt" : "") },
       h("div", { className: "topbar" },
-        h("button", { className: "link", onClick: () => onResult("abort"), "aria-label": T.close }, "✕"),
+        h("button", { className: "link", onClick: () => done("abort"), "aria-label": T.close }, "✕"),
         h("span", { className: "muted" }, T.cAim), h("span", { className: "muted" }, `#${f.round}`)),
       header,
       h("div", { className: "vats-hp" }, bar("enemy", f.c.hp, f.c.hpMax,
@@ -896,6 +964,8 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
         h("button", { className: "btn", disabled: phase !== "aim" || !queue.length, onClick: undo }, T.cUndo),
         h("button", { className: "btn primary", "data-act": "exec", disabled: phase !== "aim" || !queue.length, onClick: execute }, "▶ ", T.cExec, queue.length ? ` (${queue.length})` : ""),
         h("button", { className: "btn", "data-act": "flee", disabled: phase !== "aim" || !info.allowed, onClick: flee, title: info.allowed ? "" : T.cFleeWhy }, T.cFlee)),
+        h("button", { className: "btn vats-stim", "data-act": "stim", disabled: !canStim, onClick: addStim },
+          "+ ", T.cStim, ` (${f.p.stim - stimQueued})`, stimQueued ? h("em", null, ` · ${T.cQueue} ${stimQueued}`) : null),
       h("div", { className: "vats-log" }, lines.map((l, i) => h("p", { key: i, className: "muted" }, l))));
   }
 
@@ -906,69 +976,84 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const [found, setFound] = useState(() => new Set([map.start, ...(saved.discovered[mapKey] ?? [])]));
     const frontier = useMemo(() => frontierOf(map, byId, found, radius * 0.85), [map, byId, found, radius]);
     const [sel, setSel] = useState(null);
-    const [note, setNote] = useState(null); // { kind: "found" | "failed" | "noq", ... }
+    const [note, setNote] = useState(null); // { kind: "found" | "failed" | "noq" | "defeat" | "fled" | "msg", ... }
     const [mission, setMission] = useState(null);
     const frame = useCallback((f, fr) => viewAround([...f].map((id) => byId.get(id)).concat(fr), radius * 0.6, 260), [byId, radius]);
     const [view, setView] = useState(() => frame(found, frontier));
+    // the adventure: health, stimpaks, caps and position, kept between missions (max health follows the app's level / SPECIAL)
+    const hpMax = useMemo(() => playerOf(store).hpMax, []);
+    const [adv, setAdv] = useState(() => {
+      const a = saved.adv?.[mapKey];
+      return a && byId.has(a.at) ? { ...a, hp: Math.min(a.hp, hpMax) } : newAdventure(hpMax, map.start, (saved.discovered[mapKey] ?? []).length);
+    });
     const total = map.targets.length;
     const foundTargets = map.targets.filter((id) => found.has(id)).length;
     const complete = foundTargets >= total;
     const selected = sel && frontier.find((m) => m.id === sel);
+    const camps = useMemo(() => [...found].map((id) => byId.get(id)).filter((m) => isSafePlace(map, m)), [map, byId, found]);
+    const here = byId.get(adv.at);
+    const camp = selected ? null : camps.find((m) => m.id === sel) ?? (isSafePlace(map, here) ? here : null);
     const recolored = Boolean(map.glyphs || map.hue || Object.keys(map.icons).length);
     // places still to discover keep their icon, in another colour
     const reveal = useMemo(() => (foundTargets >= total ? undefined
       : { undiscovered: map.targets.filter((id) => !found.has(id)).map((id) => byId.get(id)) }),
     [map, byId, found, foundTargets, total]);
 
-    function persist(f) {
+    function persist(f, a) {
       setSaved((s) => {
-        const n = { ...s, discovered: { ...s.discovered, [mapKey]: [...f].filter((id) => id !== map.start) } };
+        const n = { ...s, discovered: { ...s.discovered, [mapKey]: [...f].filter((id) => id !== map.start) }, adv: { ...s.adv, [mapKey]: a } };
         saveSaved(n);
         return n;
       });
     }
+    const update = (a) => { setAdv(a); persist(found, a); };
     function onTap(p, upp) {
-      const hit = frontier.map((m) => ({ m, d: dist(p, m) })).filter((o) => o.d <= PICK_PX * upp).sort((a, b) => a.d - b.d)[0];
+      const near = (list) => list.map((m) => ({ m, d: dist(p, m) })).filter((o) => o.d <= PICK_PX * upp).sort((a, b) => a.d - b.d)[0];
+      const hit = near(frontier) ?? near(camps); // a destination, or a settlement already discovered (fast travel)
       if (hit) { setSel(hit.m.id); setNote(null); }
     }
     function travel() {
       const qs = pickMissionQuestions(store, map, foundTargets / total);
       if (!qs.length) { setNote({ kind: "noq" }); return; }
       const pool = creatures?.[map.group]; // pickCreature leaves out the creatures whose weak points are not known yet
+      const hook = testHook();
+      const meets = hook.encounter ?? (hook.creature ? true : Math.random() < ADV.encounter);
       if (!pool?.some((c) => !c.pending)) { setMission({ stage: "quiz", target: selected, qs }); return; } // no creature data: quiz only
+      if (!meets) { setMission({ stage: "quiz", target: selected, qs, quiet: true }); return; }
       setMission({ stage: "fight", target: selected, qs, ...pickCreature(pool, foundTargets, rng, testHook()) });
     }
-    function fightDone(result) {
+    function fightDone(result, left) {
       const m = mission;
-      if (result === "win") setMission({ ...m, stage: "quiz" });
-      else {
-        setMission(null);
-        if (result === "lose") setNote({ kind: "defeat", name: m.creature.name });
-        else if (result === "flee") setNote({ kind: "fled", name: m.creature.name });
-      }
+      const r = advAfterFight(adv, { result, ...left, level: m.creature.level }, hpMax, Math.random);
+      update(r.a);
+      if (result === "win") { setMission({ ...m, stage: "quiz", gain: r.gain }); return; }
+      setMission(null);
+      if (result === "lose") { setSel(null); setNote({ kind: "defeat", name: m.creature.name, loss: r.loss, back: byId.get(r.a.at) }); }
+      else if (result === "flee") setNote({ kind: "fled", name: m.creature.name });
     }
     function missionDone({ correct, total: tot }) {
-      const target = mission.target;
+      const { target, gain = 0, quiet } = mission;
       setMission(null);
       if (correct >= Math.min(MISSION_PASS, tot)) {
         const f = new Set(found).add(target.id);
+        const r = advAfterDiscover(adv, target.id, isSafePlace(map, target), Math.random);
         sound("caps");
-        setFound(f); persist(f); setSel(null);
-        setNote({ kind: "found", m: target });
+        setFound(f); setAdv(r.a); persist(f, r.a); setSel(null);
+        setNote({ kind: "found", m: target, caps: r.caps + gain, stim: r.stim, quiet });
         setView(frame(f, frontierOf(map, byId, f, radius * 0.85)));
       } else {
-        setNote({ kind: "failed", correct, total: tot });
+        setNote({ kind: "failed", correct, total: tot, gain, quiet });
       }
     }
     function restart() {
       if (typeof window !== "undefined" && !window.confirm(T.restartConfirm)) return;
-      const f = new Set([map.start]);
-      setFound(f); persist(f); setSel(null); setNote(null);
+      const f = new Set([map.start]), a = newAdventure(hpMax, map.start);
+      setFound(f); setAdv(a); persist(f, a); setSel(null); setNote(null);
       setView(frame(f, frontierOf(map, byId, f, radius * 0.85)));
     }
 
     if (mission?.stage === "fight") {
-      return h(Encounter, { key: mission.target.id, creature: mission.creature, lang, store, onResult: fightDone });
+      return h(Encounter, { key: mission.target.id, creature: mission.creature, lang, store, onResult: fightDone, hp: adv.hp, stim: adv.stim });
     }
     if (mission) {
       return h(Quiz, {
@@ -985,31 +1070,67 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
         h("circle", {
           cx: m.x, cy: m.y, r: map.patch > 5 ? map.patch * 0.78 : size * 0.62, className: "pm-fr-box", style: { strokeWidth: size * 0.075 },
         }))),
+      // settlements you can fast travel to: a small square under the icon; you: a pin above the place you are in
+      camps.map((m) => h("rect", {
+        key: "c" + m.id, className: "pm-camp-mark" + (m.id === sel ? " on" : ""), x: m.x - size * 0.75, y: m.y - size * 0.75,
+        width: size * 1.5, height: size * 1.5, style: { strokeWidth: size * 0.08 },
+      })),
+      here && h("path", {
+        className: "pm-you", d: `M${here.x} ${here.y - size * 0.8} l${-size * 0.45} ${-size * 0.8} h${size * 0.9} z`, style: { strokeWidth: size * 0.08 },
+      }),
       note?.kind === "found" && h("g", { className: "pm-result" },
         h("circle", { cx: note.m.x, cy: note.m.y, r: size * 0.8, className: "pm-pulse" }),
         h(Label, { target: note.m, map: { hit: size * 0.9 }, view })));
+
+    const pct = `${Math.max(0, Math.round((adv.hp / hpMax) * 100))}%`;
+    const hud = h("div", { className: "pm-hud" },
+      h("span", { className: "muted" }, T.aHp),
+      h("div", { className: "vats-bar me" }, h("span", { style: { width: pct } })),
+      h("em", null, `${adv.hp}/${hpMax}`),
+      h("span", { className: "pm-hud-item", "data-stim": adv.stim }, `${T.aStim} ${adv.stim}`),
+      h("span", { className: "pm-hud-item", "data-caps": adv.caps }, `${adv.caps} ${T.aCaps}`));
+    const quietLine = (n) => n.quiet && h("p", { className: "muted" }, T.aNoEncounter);
+    const campPanel = camp && h("div", { className: "pm-camp" },
+      h("div", null,
+        h("strong", null, camp.id === map.start ? T.campVault : T.camp, ": ", clean(camp.name)),
+        camp.id === adv.at && adv.hp >= hpMax && h("p", { className: "muted" }, T.aFull)),
+      camp.id === adv.at
+        ? h("div", { className: "fb-actions" },
+          h("button", { className: "btn", "data-act": "rest", disabled: !canRest(adv, hpMax, map.start), onClick: () => { update(rest(adv, hpMax, map.start)); setNote({ kind: "msg", text: T.aRested }); } },
+            T.aRest, " · ", restCost(adv, map.start) ? `${restCost(adv, map.start)} ${T.aCaps}` : T.aRestFree),
+          h("button", { className: "btn", "data-act": "buy", disabled: !canBuy(adv), onClick: () => { update(buyStim(adv)); setNote({ kind: "msg", text: T.aBought }); } },
+            T.aBuy, " · ", `${ADV.stimPrice} ${T.aCaps}`))
+        : h("button", { className: "btn primary", "data-act": "fast", onClick: () => { update(fastTravel(adv, camp.id)); setSel(null); setNote(null); } }, "➜ ", T.aFast));
 
     return h("div", { className: "screen quiz" },
       h(Header, { title: map.label, i: 0, n: 0, onExit, T }),
       h("div", { className: "progressbar" }, h("div", { style: { width: `${(foundTargets / total) * 100}%` } })),
       h("p", { className: "tags" }, h("span", { className: "badge" }, T.mDiscover), `${foundTargets}/${total} ${T.found}`),
+      hud,
       h(MapView, { map, view, setView, onTap, labels: T, home: frame(found, frontier), reveal }, overlay),
+      here && h("p", { className: "muted pm-at" }, T.aAt, " ", clean(here.name)),
       complete && h("div", { className: "feedback ok" }, h("strong", null, T.complete)),
       !complete && !selected && !note && h("p", { className: "muted center pm-hint" }, T.pickDest),
       note?.kind === "found" && h("div", { className: "feedback ok" },
         h("strong", null, T.discovered, ": ", clean(note.m.name)),
         typeOf(map, lang, note.m) && h("p", null, typeOf(map, lang, note.m)),
+        quietLine(note),
+        h("p", { className: "pm-gain" }, `+${note.caps} ${T.aGotCaps}`, note.stim ? ` · ${T.aGotStim}` : ""),
         h(Fact, { facts, place: note.m, lang, T }),
         h("div", { className: "fb-actions" },
           h("a", { className: "btn", href: wikiUrl(note.m), target: "_blank", rel: "noreferrer" }, T.wiki, " ↗"))),
       note?.kind === "failed" && h("div", { className: "feedback ko" },
-        h("strong", null, T.failed, ` (${note.correct}/${note.total})`), h("p", null, T.retry)),
+        h("strong", null, T.failed, ` (${note.correct}/${note.total})`), quietLine(note),
+        note.gain > 0 && h("p", { className: "pm-gain" }, `+${note.gain} ${T.aGotCaps}`), h("p", null, T.retry)),
       note?.kind === "noq" && h("div", { className: "feedback ko" }, h("p", null, T.needsQuestions)),
-      note?.kind === "defeat" && h("div", { className: "feedback ko" }, h("strong", null, `${T.defeatNote} ${note.name}`), h("p", null, T.cLoseSub)),
+      note?.kind === "defeat" && h("div", { className: "feedback ko" }, h("strong", null, `${T.defeatNote} ${note.name}`),
+        h("p", null, `-${note.loss} ${T.aCaps}`, note.back ? ` · ${T.aBack} ${clean(note.back.name)}` : "")),
       note?.kind === "fled" && h("div", { className: "feedback ok" }, h("strong", null, `${T.fledNote} ${note.name}`), h("p", null, T.retry)),
+      note?.kind === "msg" && h("div", { className: "feedback ok" }, h("p", null, note.text)),
       selected && !complete && h("div", { className: "pm-dest" },
         h("div", null, h("strong", null, T.unknown), typeOf(map, lang, selected) && h("p", { className: "muted" }, typeOf(map, lang, selected))),
         h("button", { className: "btn primary", onClick: travel }, "▶ ", T.travel, " · ", MISSION_QUESTIONS, " ", T.questions)),
+      campPanel,
       h("button", { className: "btn pm-restart", onClick: restart }, T.restart));
   }
 
@@ -1095,11 +1216,13 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     if (mode === "discover") return h(Discover, { key: game + mode, ...props });
     if (mode === "explore") return h(Explorer, { key: game + mode, ...props });
 
+    const adv = saved.adv?.[game], hpMax = playerOf(store).hpMax;
     const nFound = new Set([map.start, ...(saved.discovered[game] ?? [])].filter((id) => map.targets.includes(id))).size;
     const rows = [
       { id: "find", title: T.mFind, sub: T.mFindSub, tag: saved.best[game] ? `${T.record} ${saved.best[game]}` : "" },
       { id: "place", title: T.mPlace, sub: T.mPlaceSub },
-      { id: "discover", title: T.mDiscover, sub: T.mDiscoverSub, tag: `${nFound}/${map.targets.length}` },
+      { id: "discover", title: T.mDiscover, tag: `${nFound}/${map.targets.length}`,
+        sub: adv ? `${T.aHp} ${Math.min(adv.hp, hpMax)}/${hpMax} · ${T.aStim} ${adv.stim} · ${adv.caps} ${T.aCaps}` : T.mDiscoverSub },
       { id: "explore", title: T.mExplore, sub: T.mExploreSub },
     ].filter(Boolean);
     return h("div", { className: "screen" },

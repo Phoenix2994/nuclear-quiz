@@ -2,7 +2,8 @@
 // Usage: node tools/test_combat.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { newFight, playerFrom, playerShot, creatureTurn, hitChance, fleeInfo, tryFlee, pickCreature, maxShots, bodyOf, zonesFor } from "../assets/pipboy-map.js";
+import { newFight, playerFrom, playerShot, creatureTurn, hitChance, fleeInfo, tryFlee, pickCreature, maxShots, bodyOf, zonesFor,
+  ADV, newAdventure, advAfterFight, advAfterDiscover, rest, canRest, buyStim, fastTravel, useStimpak, isSafePlace, winCaps } from "../assets/pipboy-map.js";
 
 const creatures = JSON.parse(readFileSync(new URL("../data/creatures.json", import.meta.url), "utf8"));
 const find = (g, name) => creatures[g].find((c) => c.name === name);
@@ -132,5 +133,42 @@ const part = (f, key) => f.c.parts.find((p) => p.key === key);
   log("11. levels at the start:", [...new Set(start)].sort((a, b) => a - b), "| after 60 discoveries:", [...new Set(late)].sort((a, b) => a - b));
   assert.ok(Math.max(...start) <= 4 && Math.min(...late) >= 15);
   assert.ok(bodyOf(find("fnv", "Deathclaw")) in { beast: 1, humanoid: 1 });
+}
+
+// 12. ADVENTURE: health, stimpaks, caps and position carried between missions
+{
+  let a = newAdventure(60, "vault", 4);
+  assert.deepEqual(a, { hp: 60, stim: 2, caps: 40, at: "vault", safe: "vault" });
+  // a fight starts with the health you bring; a stimpak heals 40% of max health for the AP of one shot
+  const f = newFight(find("fo3", "Radroach"), rookie, 20, a.stim);
+  assert.equal(f.p.hp, 20);
+  const ap = f.p.ap, { heal } = useStimpak(f);
+  assert.equal(heal, Math.round(0.4 * rookie.hpMax)); assert.equal(f.p.stim, 1); assert.equal(f.p.ap, ap - f.p.cost);
+  // win: caps by creature level, health and stimpaks as left by the fight
+  let r = advAfterFight(a, { result: "win", hp: 35, stim: 1, level: 3 }, 60, () => 0.5);
+  assert.equal(r.gain, winCaps(3, 0.5)); assert.equal(r.gain, 14);
+  a = r.a; assert.equal(a.hp, 35); assert.equal(a.stim, 1); assert.equal(a.caps, 54);
+  // discovering a settlement moves you there and makes it the place you wake up at
+  r = advAfterDiscover(a, "megaton", true, () => 0.1);
+  a = r.a; assert.equal(a.caps, 64); assert.equal(a.stim, 2); assert.equal(a.at, "megaton"); assert.equal(a.safe, "megaton");
+  a = advAfterDiscover(a, "ruins", false, () => 0.9).a;
+  assert.equal(a.at, "ruins"); assert.equal(a.safe, "megaton"); assert.equal(a.stim, 2);
+  // defeat: a quarter of the caps lost, back at the last settlement with half health
+  r = advAfterFight(a, { result: "lose", hp: 0, stim: 0, level: 5 }, 60, () => 0.5);
+  assert.equal(r.loss, 18); a = r.a;
+  assert.deepEqual([a.hp, a.caps, a.at, a.stim], [30, 56, "megaton", 0]);
+  // fleeing keeps what is left, never 0 health
+  assert.equal(advAfterFight(a, { result: "flee", hp: 0, stim: 0 }, 60, () => 0).a.hp, 1);
+  // settlement: rest (10 caps, free in the starting vault), stimpaks for 25 caps
+  assert.ok(canRest(a, 60, "vault"));
+  a = rest(a, 60, "vault"); assert.deepEqual([a.hp, a.caps], [60, 46]);
+  assert.equal(rest(a, 60, "vault"), a); // already full: nothing happens
+  a = buyStim(a); assert.deepEqual([a.stim, a.caps], [1, 21]);
+  assert.equal(buyStim(a), a); // not enough caps
+  a = fastTravel({ ...a, hp: 10 }, "vault"); assert.equal(rest(a, 60, "vault").caps, 21);
+  const map = { start: "v" };
+  assert.ok(isSafePlace(map, { id: "v", cat: "Vaults" }) && isSafePlace(map, { id: "x", cat: "Medium settlements" }) && isSafePlace(map, { id: "y", cat: "Towns" }));
+  assert.ok(!isSafePlace(map, { id: "z", cat: "Caves" }) && !isSafePlace(map, { id: "w", cat: "Town Ruins" }));
+  log("12. adventure: caps", a.caps, "stimpaks", a.stim, "encounter chance", ADV.encounter);
 }
 console.log("combat engine: all battles ok");

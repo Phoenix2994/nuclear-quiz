@@ -225,3 +225,21 @@ sprites that reuse the FO4 ones, tinted green; FO76 the wiki icons as they are. 
 never offered together (`CLOSE`). The questions have no `articleId`, so they unlock no database entry. A rebuild of
 `data/questions-*.json` from the original sources drops them: run the script again (it replaces the `icon-*` ids and
 updates `sizes` in `data/trivia.json`).
+
+## Adventure (discovery mode)
+
+Health, stimpaks, caps and position are carried from one mission to the next and saved per map in the module's own
+storage (`adv` in `wasteland-quiz-map-v1`: `{ hp, stim, caps, at, safe }`). The rules are pure functions next to the fight
+engine (`ADV`, `newAdventure`, `advAfterFight`, `advAfterDiscover`, `rest`, `buyStim`, `fastTravel`, `useStimpak`,
+`isSafePlace`), unit-tested in `tools/test_combat.mjs` (12).
+
+- Start: max health (from the app's level and SPECIAL), 2 stimpaks, 20 caps (+5 per place discovered before the
+  adventure existed), in the starting vault.
+- A trip meets a creature 75% of the time (`ADV.encounter`); otherwise straight to the 3 questions.
+- Fights start with the health you have; a stimpak (queued like a shot, costs one shot's AP) heals 40% of max health.
+- Win: 5 + 3 x creature level caps (+-20%). Flee / leave: keep what is left. Defeat: lose 25% of the caps, wake up at the
+  last settlement with half health.
+- Discovered place: +10 caps, 25% chance of a stimpak (max 10); you move there.
+- Settlements (settlement / city / town categories, plus the starting vault; `SAFE_CAT`): marked with a square. Tap one
+  to fast travel (free); in the one you are in: rest to full health (10 caps, free in the vault), buy a stimpak (25 caps).
+- Test hook: `window.__PM.encounter` forces (true) or skips (false) the creature; with `creature` set it is always met.
