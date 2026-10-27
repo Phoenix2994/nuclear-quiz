@@ -146,13 +146,30 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
 
   // ---- map layers
 
-  const Layers = React.memo(function Layers({ map, size }) {
+  // The map image, its icons and, in the discovery mode, only the icons of the places already discovered.
+  // `reveal` = { shown: Set of marker ids whose icon is visible, hidden: markers whose icon must be covered }.
+  //  - maps with a "clean" twin (icons wiped out): draw the clean map, then restore the original in a square around shown markers
+  //  - FO76 (painted pictograms, cannot be wiped): cover the hidden markers with dark discs, like the fog
+  //  - the tinted DLC maps have no baked icons: only the glyphs of the shown markers are drawn
+  const Layers = React.memo(function Layers({ map, size, reveal }) {
     const icons = map.icons;
+    const glyphs = Object.keys(icons).length > 0;
+    const restore = reveal && map.clean;
     return h("g", null,
-      h("image", { href: map.image, x: 0, y: 0, width: SIZE, height: SIZE, className: "pm-bg" }),
-      // The tinted DLC maps carry no icons: draw the category glyphs.
-      Object.keys(icons).length > 0 && h("g", { className: "pm-icons" }, map.markers.map((m) =>
-        icons[m.c] && h("image", {
+      h("image", { href: restore ? map.clean : map.image, x: 0, y: 0, width: SIZE, height: SIZE, className: "pm-bg" }),
+      restore && h("g", null,
+        h("defs", null, h("clipPath", { id: "pm-restore" },
+          map.markers.filter((m) => reveal.shown.has(m.id)).map((m) => h("rect", { key: m.id, x: m.x - map.patch * 0.95, y: m.y - map.patch * 0.95, width: map.patch * 1.9, height: map.patch * 1.9 })))),
+        h("image", { href: map.image, x: 0, y: 0, width: SIZE, height: SIZE, className: "pm-bg", clipPath: "url(#pm-restore)" })),
+      reveal && !map.clean && !glyphs && h("g", null,
+        h("defs", null, h("radialGradient", { id: "pm-plug-g" },
+          h("stop", { offset: "0", stopColor: "#010603", stopOpacity: 0.96 }),
+          h("stop", { offset: "0.65", stopColor: "#010603", stopOpacity: 0.96 }),
+          h("stop", { offset: "1", stopColor: "#010603", stopOpacity: 0 }))),
+        reveal.hidden.map((m) => h("circle", { key: m.id, cx: m.x, cy: m.y, r: map.patch * 1.25, fill: "url(#pm-plug-g)" }))),
+      // the tinted DLC maps carry no icons: draw the category glyphs
+      glyphs && h("g", { className: "pm-icons" }, map.markers.map((m) =>
+        icons[m.c] && (!reveal || reveal.shown.has(m.id)) && h("image", {
           key: m.id, href: icons[m.c], x: m.x - size / 2, y: m.y - size / 2, width: size, height: size,
         }))));
   });
@@ -172,7 +189,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
       h("rect", { x: 0, y: 0, width: SIZE, height: SIZE, className: "pm-fog-rect", mask: "url(#pm-fog-m)" }));
   });
 
-  function MapView({ map, view, setView, onTap, children, labels, home, interactive = true }) {
+  function MapView({ map, view, setView, onTap, children, labels, home, reveal, interactive = true }) {
     const svgRef = useRef(null);
     const ptrs = useRef(new Map());
     const drag = useRef({ moved: false, start: null, pinch: 0 });
@@ -253,7 +270,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
         ref: svgRef, className: "pm-svg", viewBox: `${view.x} ${view.y} ${view.w} ${view.w}`,
         ...(interactive ? { onPointerDown: onDown, onPointerMove: onMove, onPointerUp: onUp, onPointerCancel: onUp } : {}),
         role: "img", "aria-label": map.label,
-      }, h(Layers, { map, size }), children && children(size)),
+      }, h(Layers, { map, size, reveal }), children && children(size)),
       interactive && h("div", { className: "pm-zoom" },
         h("button", { className: "sqbtn", "aria-label": labels.zin, onClick: () => center(0.7) }, "+"),
         h("button", { className: "sqbtn", "aria-label": labels.zout, onClick: () => center(1.4) }, "−"),
@@ -495,6 +512,17 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     const foundTargets = map.targets.filter((id) => found.has(id)).length;
     const complete = foundTargets >= total;
     const selected = sel && frontier.find((m) => m.id === sel);
+    // icons visible: discovered places, plus the minor markers near them; the undiscovered targets stay covered
+    const reveal = useMemo(() => {
+      if (foundTargets >= total) return undefined;
+      const reached = [...found].map((id) => byId.get(id)).filter(Boolean);
+      const isTarget = new Set(map.targets);
+      const shown = new Set(found);
+      map.markers.forEach((m) => {
+        if (!isTarget.has(m.id) && reached.some((r) => dist(r, m) <= radius * 0.8)) shown.add(m.id);
+      });
+      return { shown, hidden: map.markers.filter((m) => isTarget.has(m.id) && !found.has(m.id)) };
+    }, [map, byId, found, radius, foundTargets, total]);
 
     function persist(f) {
       setSaved((s) => {
@@ -551,7 +579,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
       h(Header, { title: map.label, i: 0, n: 0, onExit, T }),
       h("div", { className: "progressbar" }, h("div", { style: { width: `${(foundTargets / total) * 100}%` } })),
       h("p", { className: "tags" }, h("span", { className: "badge" }, T.mDiscover), `${foundTargets}/${total} ${T.found}`),
-      h(MapView, { map, view, setView, onTap, labels: T, home: frame(found, frontier) }, overlay),
+      h(MapView, { map, view, setView, onTap, labels: T, home: frame(found, frontier), reveal }, overlay),
       complete && h("div", { className: "feedback ok" }, h("strong", null, T.complete)),
       !complete && !selected && !note && h("p", { className: "muted center pm-hint" }, T.pickDest),
       note?.kind === "found" && h("div", { className: "feedback ok" },

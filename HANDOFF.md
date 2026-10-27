@@ -13,7 +13,7 @@ dropping the bundle patch.
 | `assets/pipboy-map.css` | Styles (uses the app's CSS variables: `--fg`, `--warn`, `--bad`, `--font`…) | Merge into the app styles |
 | `data/maps.json` | Markers, coordinates, targets, icon paths for FO3 / FNV / FO4 / FO76 (generated) | Copy to the app's static/public folder |
 | `img/maps/*.webp`, `img/maps/icons/*.png` | Map images and marker glyphs (generated) | Copy to static/public |
-| `tools/build_maps.py` | Regenerates the two rows above from the Fallout Wiki | Keep in repo (`python3 tools/build_maps.py`, needs `curl` and Pillow) |
+| `tools/build_maps.py` | Regenerates the two rows above from the Fallout Wiki | Keep in repo (`python3 tools/build_maps.py`, needs `curl`, Pillow and `opencv-python-headless`) |
 | `tools/sources/*.jpg` | In-game Pip-Boy maps with icons for FO3 and FNV (input of the build script) | Keep with the tool |
 | `tools/smoke_map.mjs` | Playwright smoke test of the MAP tab | Optional |
 
@@ -63,6 +63,15 @@ Perception (S.P.E.C.I.A.L.) point work like any other quiz. `store.completeSessi
 | Discover the map | Fog of war. Starts at the game's first vault (`start` in `data/maps.json`, table `START` in the build script). The 4 nearest undiscovered places appear as empty green-circle markers (the wiki's `Icon FOx Map Circle`, redrawn as SVG); pick one and "travel": a 3-question mission built from the app's own questions for that game (unseen first). All 3 answers must be right (`MISSION_PASS`) to discover the place and lift the fog around it; otherwise try again. Progress is saved per map. |
 | Explorer | Browse freely; tap an icon for name, type and wiki link; highlight a category. |
 | Which icon is this? | A zoomed icon is circled, pick the kind of place (only generic categories, never a place's own name). Not offered for FO76 (its icons are pictures, not glyphs). |
+
+The icons of undiscovered places are hidden (`Layers` / `reveal` in the module):
+- FO3, FNV, FO4: the maps have the icons baked in, so the build script also writes `img/maps/<map>-clean.webp`
+  (icons inpainted away: only the bright glyph pixels around each marker, `make_clean`). The mode draws the clean map and
+  restores the original image in a square around the discovered places (`patch` in `data/maps.json`) and the minor markers near them.
+- FO76: painted pictograms cannot be inpainted (tried: polygon smears), so the undiscovered targets are covered with
+  dark soft discs like the fog.
+- DLC maps: no baked icons, only the glyphs of the revealed markers are drawn.
+Some baked icons without a wiki marker (or a bit off) can stay visible on the clean maps.
 
 Categories that are a place's own name (Diamond City, Castle…) are never shown as a hint (`isGeneric`).
 
