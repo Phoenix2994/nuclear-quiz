@@ -40,7 +40,9 @@ GLYPH_CONTRAST = {"fo4": 40}  # FO4 glyphs have no plate: a transparent layer of
 # FO3 / FNV icons are filled plates: a square copy of the map around the icon with its colour rotated (degrees, half size)
 HUE_TINT = {"fo3": -100, "fnv": 155}  # degrees: green -> amber, amber -> cyan
 # size in pixels of the icon plates of the real maps (FO3 is upscaled x2), and how far from the wiki marker to look for its icon
-ICON_PLATE = {"fo3": (20, 26), "fnv": (12, 16)}
+# Only New Vegas: the Fallout 3 map is a low-resolution placeholder that may be replaced, so its markers keep the wiki coordinates.
+ICON_PLATE = {"fnv": (12, 16)}
+HUE_HALF = {"fo3": 14}  # half size of the recoloured box (map units) where the markers are not snapped onto the icons
 UNDISCOVERED = {"fo3": (255, 176, 64), "fnv": (80, 215, 255), "fo4": (255, 176, 64)}  # colour of the icons to discover
 GROUP_COLOR = {"fo3": (110, 255, 130), "fnv": (255, 186, 96)}  # glyph / tint colour of the maps without baked icons
 # Where the "discover the map" mode starts (marker name): the game's starting vault or town, or the DLC entry point
@@ -350,7 +352,8 @@ def main():
         for old in ("fo3", "fnv"):  # leftovers of a previous method
             if g == old and os.path.exists(os.path.join(ROOT, f"img/maps/{g}-glyphs.webp")):
                 os.remove(os.path.join(ROOT, f"img/maps/{g}-glyphs.webp"))
-        hue = [HUE_TINT[g], round(ICON_PLATE[g][0] / im.width * 1000 / 2 + 1, 1)] if g in HUE_TINT else None  # rotation, half box
+        half = round(ICON_PLATE[g][0] / im.width * 1000 / 2 + 1, 1) if g in ICON_PLATE else HUE_HALF.get(g)
+        hue = [HUE_TINT[g], half] if g in HUE_TINT else None  # rotation, half box
         out[g] = {
             "start": start, "glyphs": glyphs, "hue": hue, "patch": ICON_RADIUS.get(g, 0) + 2, "label": label, "group": group, "short": short, "image": dst, "hit": hit, "bbox": [round(v) for v in bbox], "icons": icons, "icons_undisc": icons_undisc,
             "cats": {c["id"]: c["name"] for c in m["categories"]},
