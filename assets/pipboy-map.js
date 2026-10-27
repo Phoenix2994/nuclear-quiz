@@ -676,6 +676,33 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
 
   const copy = (x) => JSON.parse(JSON.stringify(x));
 
+  // the part's rectangle as a soft-edged mask (two gradients intersected), so the glow fades out instead of ending on a straight cut
+  function featherMask(x, y, w, hh) {
+    const F = 6, pc = (v) => `${(v * 100).toFixed(1)}%`;
+    const band = (dir, a, b) => `linear-gradient(${dir}, transparent calc(${pc(a)} - ${F}%), #000 ${pc(a)}, #000 ${pc(b)}, transparent calc(${pc(b)} + ${F}%))`;
+    const mask = `${band("to right", x, x + w)}, ${band("to bottom", y, y + hh)}`;
+    return { maskImage: mask, WebkitMaskImage: mask, maskComposite: "intersect", WebkitMaskComposite: "source-in" };
+  }
+
+  // place the V.A.T.S. labels on the side of their body part, nearest first, without overlapping (fractions of the picture height)
+  function layoutLabels(parts) {
+    const GAP = 0.2;
+    const items = parts.map((part) => ({ part, cx: part.box[0] + part.box[2] / 2, cy: part.box[1] + part.box[3] / 2 }));
+    const count = { L: 0, R: 0 };
+    for (const it of [...items].sort((a, b) => Math.abs(b.cx - 0.5) - Math.abs(a.cx - 0.5))) {
+      it.side = it.cx < 0.45 ? "L" : it.cx > 0.55 ? "R" : count.L <= count.R ? "L" : "R";
+      count[it.side]++;
+    }
+    for (const side of ["L", "R"]) {
+      const col = items.filter((it) => it.side === side).sort((a, b) => a.cy - b.cy);
+      let y = -Infinity;
+      for (const it of col) { it.ly = Math.max(it.cy, y + GAP); y = it.ly; }
+      const over = y - 0.95; // pushed past the bottom: slide the whole column up
+      if (over > 0) col.forEach((it) => { it.ly -= over; });
+    }
+    return items;
+  }
+
   function Encounter({ creature, lang, store, onResult }) {
     const T = TEXT[lang] ?? TEXT.en;
     const player = useMemo(() => {
@@ -687,6 +714,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const [phase, setPhase] = useState("intro"); // intro | aim | exec | win | lose | fled
     const [queue, setQueue] = useState([]); // [{ part, crit }]
     const [armed, setArmed] = useState(false);
+    const [focus, setFocus] = useState(null);
     const [flash, setFlash] = useState(null);
     const [hurt, setHurt] = useState(null);
     const [lines, setLines] = useState([]);
@@ -757,28 +785,59 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const bar = (cls, v, max, extra) => h("div", { className: "vats-bar " + cls }, h("span", { style: { width: hpPct(v, max) } }), extra);
 
     const ar = creature.w / creature.h;
-    const zones = f.c.parts.map((part) => {
+    // V.A.T.S. look: the targeted body part lights up following the creature's silhouette (a copy of the picture clipped to the
+    // part's rectangle: the transparent background keeps only the creature's pixels), labels sit on the sides with leader lines
+    const focusKey = focus && f.c.parts.some((x) => x.key === focus) ? focus : "torso";
+    const placed = layoutLabels(f.c.parts);
+    const pick = (key) => { setFocus(key); add(key); };
+    const canShoot = phase === "aim" && apLeft >= f.p.cost;
+    const glows = f.c.parts.map((part) => {
       const [x, y, w, hh] = part.box;
+      const queued = queue.some((q) => q.part === part.key);
+      const fl = flash && flash.part === part.key ? flash : null;
+      const cls = fl ? (fl.hit ? " flash" : " missed") : part.key === focusKey ? " on" : queued ? " queued" : part.crippled ? " crippled" : "";
+      return h("div", { key: part.key, className: "vats-glow" + cls },
+        h("img", { src: creature.img, alt: "", draggable: false, style: featherMask(x, y, w, hh) }));
+    });
+    // invisible hit areas over the body, smallest on top so a limb wins over the torso it overlaps
+    const hits = [...f.c.parts].sort((a, b) => b.box[2] * b.box[3] - a.box[2] * a.box[3]).map((part) => {
+      const [x, y, w, hh] = part.box;
+      return h("button", {
+        key: part.key, className: "vats-hit", disabled: !canShoot, tabIndex: -1, "aria-hidden": "true",
+        style: { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${hh * 100}%` },
+        onClick: () => pick(part.key), onMouseEnter: () => setFocus(part.key),
+      });
+    });
+    const leaders = h("svg", { className: "vats-lines", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" },
+      placed.map(({ part, side, ly }) => {
+        const [x, y, w, hh] = part.box;
+        return h("polyline", {
+          key: part.key, className: part.key === focusKey ? "on" : "",
+          points: `${side === "L" ? -3 : 103},${ly * 100} ${side === "L" ? 2 : 98},${ly * 100} ${(x + w / 2) * 100},${(y + hh / 2) * 100}`,
+        });
+      }));
+    const labels = placed.map(({ part, side, ly }) => {
       const hit = hitChance(f, part);
       const queued = queue.filter((q) => q.part === part.key).length;
       const fl = flash && flash.part === part.key ? flash : null;
       return h("button", {
-        key: part.key, disabled: phase !== "aim" || apLeft < f.p.cost,
-        className: "vats-zone" + (part.crippled ? " crippled" : "") + (queued ? " queued" : "") + (fl ? (fl.hit ? " hit" : " miss") : ""),
-        style: { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${hh * 100}%` },
-        onClick: () => add(part.key), "aria-label": `${part.label[lang]} ${hit}%`,
+        key: part.key, disabled: !canShoot,
+        className: `vats-zone ${side}` + (part.key === focusKey ? " on" : "") + (part.crippled ? " crippled" : "") + (queued ? " queued" : ""),
+        style: { top: `${ly * 100}%` },
+        onClick: () => pick(part.key), onMouseEnter: () => setFocus(part.key), "aria-label": `${part.label[lang]} ${hit}%`,
       },
-        h("b", null, part.crippled ? "✕" : `${hit}%`),
-        h("small", null, `${part.label[lang]} ×${(Math.round(part.mult * 10) / 10).toString()}`),
-        part.max ? h("i", { className: "vats-limb" }, h("span", { style: { width: hpPct(part.hp, part.max) } })) : null,
+        h("small", null, part.label[lang]),
+        h("b", null, part.crippled ? "✕" : `${hit}%`, h("i", null, ` ×${Math.round(part.mult * 100) / 100}`)),
+        part.max ? h("span", { className: "vats-limb" }, h("span", { style: { width: hpPct(part.hp, part.max) } })) : null,
         queued ? h("em", null, queued) : null,
         fl ? h("u", { className: "vats-dmg" }, fl.hit ? `-${fl.dmg}` : T.cMiss) : null);
     });
 
-    const stage = h("div", { className: "vats-stage" },
+    const aiming = phase !== "intro" && phase !== "win" && phase !== "lose" && phase !== "fled";
+    const stage = h("div", { className: "vats-stage" + (aiming ? " aiming" : ""), key: aiming ? "aim" : "still" },
       h("div", { className: "vats-pic" + (hurt?.hit ? " struck" : ""), style: { "--ar": ar } },
-        h("img", { src: creature.img, alt: creature.name, draggable: false }),
-        phase === "intro" ? null : zones));
+        h("img", { className: "vats-base", src: creature.img, alt: creature.name, draggable: false }),
+        aiming ? [h("div", { key: "g", className: "vats-glows" }, glows), h("div", { key: "h", className: "vats-hits" }, hits), leaders, ...labels] : null));
 
     const header = h("div", { className: "vats-head" },
       h("div", null, h("strong", null, creature.name), h("span", { className: "vats-lv" }, ` ${T.cLevel} ${level}`)),
