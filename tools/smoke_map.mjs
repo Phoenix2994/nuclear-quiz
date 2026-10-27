@@ -6,6 +6,7 @@ import { chromium } from "playwright";
 const base = process.argv[2] ?? "http://localhost:8000";
 const maps = JSON.parse(readFileSync(new URL("../data/maps.json", import.meta.url), "utf8"));
 const short = { fo3: "FO3", fnv: "FNV", fo4: "FO4", fo76: "76" };
+const isMain = (g) => g === maps[g].group;
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 400, height: 860 } });
 const errors = [];
@@ -16,10 +17,12 @@ await page.waitForSelector(".tabs");
 await page.click('.tabs button:has-text("MAP")');
 
 for (const g of Object.keys(maps)) {
-  await page.click(`.chips button:has-text("${short[g]}")`);
+  await page.click(`.chips button:text-is("${short[maps[g].group]}")`);
+  if (!isMain(g)) await page.click(`.chips button:text-is("${maps[g].short}")`);
   await page.click("text=/START|INIZIA/");
   let ok = 0;
-  for (let i = 0; i < 10; i++) {
+  const rounds = Math.min(10, maps[g].targets.length);
+  for (let i = 0; i < rounds; i++) {
     await page.waitForSelector(".pm-target");
     const name = (await page.textContent(".pm-target")).trim();
     const t = maps[g].markers.find((m) => m.name.trim() === name);

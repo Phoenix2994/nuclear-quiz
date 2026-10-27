@@ -52,10 +52,15 @@ Perception (S.P.E.C.I.A.L.) point work like any other quiz. `store.completeSessi
 
 ## How the quiz works
 
-- `data/maps.json` → `{ fo3|fnv|fo4|fo76: { label, image, hit, bbox, icons, cats, markers, targets } }`.
+- `data/maps.json` → `{ <mapKey>: { label, group, short, image, hit, bbox, icons, cats, markers, targets } }`.
+  Map keys: `fo3`, `fo3pl` (Point Lookout), `fo3tp` (The Pitt), `fo3oa` (Operation Anchorage), `fnv`, `fnvhh` (Honest Hearts),
+  `fnvlr` (Lonesome Road), `fnvowb` (Old World Blues), `fo4`, `fo76`. `group` is the game (the first row of chips),
+  `short` the name in the second row of chips (shown when a game has more than one map). Broken Steel and Dead Money
+  are left out (5 and 7 markers); add them in `GAMES` in `tools/build_maps.py` if wanted.
   Coordinates are 0–1000 on a square map. `targets` are the marker ids that can be asked
   (notable locations, see `tools/build_maps.py`: major categories, markers alone in their category,
-  markers that have an entry in `data/articles.json`). `hit` is the tap tolerance in map units.
+  markers that have an entry in `data/articles.json`; the DLC maps ask every marker; FO3/FNV locations that the wiki's
+  "Fallout 3 locations" / "Fallout: New Vegas locations" lists show in italic, i.e. not marked on the Pip-Boy, are never asked). `hit` is the tap tolerance in map units.
 - 10 random targets per session; a tap within `hit` of the target is correct. Tapping another marker
   names it in the feedback.
 - FO4 and FO76 images already contain their icons. FO3 and New Vegas images have none: the markers are drawn
@@ -77,7 +82,9 @@ python3 tools/build_maps.py          # regenerate data + images (cache in .map-c
 - Move the module's texts (`TEXT`, `CAT_IT`) into the app's i18n files; the tab label is hard-coded `"MAP"`.
 - Tune the target list per game (`MAJOR`, `SKIP_CATS` in `tools/build_maps.py`) and the hit radius; add difficulty.
 - Descriptions for the places (the wiki markers only carry a name, a category and a page link).
-- More maps: Fallout 1/2 world maps, Nuka-World / Far Harbor (the wiki has interactive maps for them too).
+- More maps: Fallout 1/2 world maps, Nuka-World / Far Harbor, Broken Steel / Dead Money (the wiki has interactive maps for them too).
+- FO3/FNV icons: the wiki's own recreation of the original markers ("Icon … gamebryo") are still the alternative to the
+  FO4 glyphs; the wiki location lists contain neither icons nor coordinates (fallout.wiki blocks scripted downloads).
 - The FO76 map shows the Mappalachia watermark at the bottom of the image (credited in README).
 - The zoom buttons sit over the top-right corner of the map; a target there needs a pan first.
 

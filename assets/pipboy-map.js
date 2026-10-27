@@ -7,8 +7,7 @@ const SIZE = 1000; // maps are square; marker coordinates are in 0-1000 map unit
 const MIN_W = 80; // closest zoom, in map units
 const PICK_RADIUS = 14; // tap this close to another marker to name it in the feedback
 const ROUNDS = 10;
-const GAME_ORDER = ["fo3", "fnv", "fo4", "fo76"];
-const GAME_SHORT = { fo3: "FO3", fnv: "FNV", fo4: "FO4", fo76: "76" };
+const GROUP_SHORT = { fo3: "FO3", fnv: "FNV", fo4: "FO4", fo76: "76" }; // game chips, in display order
 const WIKI = "https://fallout.fandom.com/wiki/";
 
 const TEXT = {
@@ -181,7 +180,7 @@ export function createMapTab({ React, useStore, useI18n, sound }) {
     return a.slice(0, ROUNDS).map((id) => byId.get(id));
   }
 
-  function MapQuiz({ gameKey, map, lang, onExit, store }) {
+  function MapQuiz({ map, lang, onExit, store }) {
     const T = TEXT[lang] ?? TEXT.en;
     const home = useMemo(() => bboxView(map.bbox), [map]);
     const [rounds, setRounds] = useState(() => pickRounds(map));
@@ -202,7 +201,7 @@ export function createMapTab({ React, useStore, useI18n, sound }) {
         .filter((o) => o.d <= PICK_RADIUS).sort((x, y) => x.d - y.d)[0];
       sound(ok ? "right" : "wrong");
       const xp = store.answer(
-        { id: "map:" + target.id, kind: "map", tipo: "luogo", livello: 2, giochi: [gameKey] },
+        { id: "map:" + target.id, kind: "map", tipo: "luogo", livello: 2, giochi: [map.group] },
         ok, (Date.now() - t0.current) / 1000);
       setScore((s) => ({ ok: s.ok + (ok ? 1 : 0), xp: s.xp + xp }));
       setPick({ ...p, ok, other: other?.m });
@@ -283,14 +282,21 @@ export function createMapTab({ React, useStore, useI18n, sound }) {
     const map = maps && maps[game];
     useEffect(() => { if (map) setPreviewView(bboxView(map.bbox)); }, [game, maps]);
 
+    const areas = map ? Object.keys(maps).filter((k) => maps[k].group === map.group) : [];
+
     if (failed) return h("div", { className: "screen" }, h("p", { className: "muted" }, T.error));
     if (!map || !previewView) return h("div", { className: "screen" }, h("p", { className: "muted" }, T.loading));
     if (playing) {
-      return h(MapQuiz, { key: game, gameKey: game, map, lang, store, onExit: () => setPlaying(false) });
+      return h(MapQuiz, { key: game, map, lang, store, onExit: () => setPlaying(false) });
     }
     return h("div", { className: "screen" },
-      h("div", { className: "chips scroll" }, GAME_ORDER.map((g) =>
-        h("button", { key: g, className: "chip" + (g === game ? " on" : ""), onClick: () => setGame(g) }, GAME_SHORT[g]))),
+      h("div", { className: "chips scroll" }, Object.keys(GROUP_SHORT).map((grp) =>
+        h("button", {
+          key: grp, className: "chip" + (grp === map.group ? " on" : ""),
+          onClick: () => setGame(Object.keys(maps).find((k) => maps[k].group === grp)),
+        }, GROUP_SHORT[grp]))),
+      areas.length > 1 && h("div", { className: "chips scroll" }, areas.map((k) =>
+        h("button", { key: k, className: "chip" + (k === game ? " on" : ""), onClick: () => setGame(k) }, maps[k].short))),
       h("header", { className: "hero-title" }, h("h2", null, map.label), h("p", { className: "muted" }, T.sub)),
       h(MapView, { map, view: previewView, setView: setPreviewView, onTap: () => {}, labels: T, interactive: false }),
       h("div", { className: "pb-detail" },
