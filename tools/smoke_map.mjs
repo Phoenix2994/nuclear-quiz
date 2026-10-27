@@ -15,6 +15,11 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 const check = (cond, msg) => { if (!cond) { errors.push("FAIL: " + msg); console.log("FAIL:", msg); } };
 
+// scripted dice: every shot and every strike hits for average damage (see tools/smoke_combat.mjs for real fights)
+await page.addInitScript(() => {
+  const v = [0.1, 0.5]; let i = 0;
+  window.__PM = { level: 1, fast: true, rng: () => v[i++ % 2] };
+});
 await page.goto(base);
 await page.waitForSelector(".tabs");
 await page.click('.tabs button:has-text("MAP")');
@@ -69,6 +74,19 @@ async function choiceMode(key, mode) {
   await page.click("text=CONTINUE");
 }
 
+// fight the creature of a mission: queue body shots until the action points are spent, execute, repeat until it falls
+async function winFight() {
+  await page.waitForSelector(".vats");
+  await page.click('[data-act="fight"]');
+  for (let round = 0; round < 12; round++) {
+    while ((await page.locator(".vats-pips i.free").count()) > 0) await page.locator(".vats-zone").nth(1).click(); // the body zone
+    await page.click('[data-act="exec"]');
+    await page.waitForFunction(() => document.querySelector(".feedback.ok") || document.querySelector('.vats-zone:not([disabled])'), null, { timeout: 20000 });
+    if (await page.locator(".feedback.ok").count()) break;
+  }
+  await page.click(".feedback .btn.primary");
+}
+
 // 3. discover: travel to a destination and answer the mission with the right answers
 async function discoverMode(key, pass) {
   await page.click('[data-mode="discover"]');
@@ -80,6 +98,7 @@ async function discoverMode(key, pass) {
   await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
   await page.waitForSelector(".pm-dest");
   await page.click(".pm-dest .btn.primary");
+  await winFight();
   for (let i = 0; i < 3; i++) {
     await page.waitForSelector(".question");
     const text = (await page.textContent(".question")).trim();

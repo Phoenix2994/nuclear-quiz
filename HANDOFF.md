@@ -17,6 +17,9 @@ dropping the bundle patch.
 | `tools/sources/*.jpg` | In-game Pip-Boy maps with icons for FO3 and FNV (input of the build script) | Keep with the tool |
 | `data/place-facts.json` | One curiosity (EN + IT) per place that has one: 105 places (generated) | Copy to static/public |
 | `tools/build_facts.py` | Builds it from the wiki's "Behind the scenes" bullets (filtered) and `tools/sources/place-facts-it.json` (hand-written Italian translations) | Keep in repo |
+| `data/creatures.json`, `img/creatures/*.webp` | 95 creatures (FO3 17, FNV 28, FO4 18, FO76 32) with transparent image, level tier, speed and body type (generated) | Copy to static/public |
+| `tools/build_creatures.py` | Builds them from the wiki creature categories; level/speed/body are game-design tables in the script | Keep in repo (needs Pillow) |
+| `tools/test_combat.mjs`, `tools/smoke_combat.mjs` | Fight engine unit tests and full browser battles with scripted dice | Optional |
 | `tools/smoke_map.mjs` | Playwright smoke test of the MAP tab | Optional |
 
 ## Integration in the original sources (4 changes)
@@ -81,6 +84,39 @@ Categories that are a place's own name (Diamond City, Castle…) are never shown
 
 Own persistence: discovered places and best scores live in `localStorage` key `wasteland-quiz-map-v1`, outside the app
 store (the app's "reset progress" does not clear it). In the real sources move them into the store/progress object.
+
+## The fight (discovery mode)
+
+Travelling to a place now has two steps: **fight, then quiz**. Rules live in the pure functions at the top of
+`assets/pipboy-map.js` (`newFight`, `playerShot`, `creatureTurn`, `fleeInfo`, `pickCreature`), modelled on V.A.T.S.
+(Fallout 3/4: per-part hit chance capped at 95%, action points per shot and a queue of shots, limbs with their own health
+that cripple at zero, a critical meter fed by every shot and faster with Luck, criticals always hit).
+
+1. A creature of the game appears (image, level, speed). The stronger the discovered part of the map (`1 + discovered/5`),
+   the tougher it is (`pickCreature`).
+2. **Fight** or **Flee**.
+3. Flee is only enabled if you are faster than the creature (`3 + Agility` > its speed: slow 3, normal 5, fast 8, -2 per
+   crippled leg/wing pair) or it is blind (head crippled). It then succeeds with `60 + 10 x speed difference` %; a failed
+   escape gives the creature a free turn. Fleeing ends the mission without discovering the place.
+4. Fight: pick body parts (hit % shown on each zone, current limb health bar), queue as many shots as the AP allow
+   (2 AP per shot, `6 + 2 x Agility` AP), optionally arm the **critical** when the meter is full, press **Execute**. Shots resolve one by
+   one, then the creature strikes back (2 strikes if fast), then your AP refill.
+
+| | Formula |
+|---|---|
+| Creature of level L | health `8 + 10 L`, damage `3 + 2 L`, dodges `2 L`% (+6 if fast) |
+| You | health `40 + 8 End + 5 Lv`, damage `6 + 2 Lv + Str`, hit chance `part accuracy + 3 Per - dodge` (5-95%) |
+| Parts | head acc 45 x2 damage (blinds: creature hit chance halves); torso 80 x1; arms/claws 55 x0.7 (crippled: creature damage -25% each); legs/wings 60 x0.8 (crippled: slower, easier to hit) |
+| Crit meter | `+14 + 3 Luck` per shot, 100 = full; the critical shot always hits and does x2 |
+
+So a weak creature (a level-1 radroach, 18 HP) can die from one head shot, a stronger one needs several shots over
+several rounds. Player stats come from the app (`stats.level`, `stats.special`: `ts(xp).level` and `ns(progress, key)` in
+the bundle). Win -> quiz (3 of 3 correct), lose or flee -> back to the map. Crippled zones show ✕, the map keeps no HP
+between missions. Everything is tunable: tables `BODIES`, constants in `newFight` / `playerFrom` / `creatureTurn`,
+and `TIERS` / `SPEED` / `BODY` in `tools/build_creatures.py`.
+
+Test hook (used by `tools/smoke_combat.mjs`): `window.__PM = { rng, creature, level, fast }` makes dice, the creature and
+the animation speed deterministic. Not set in production.
 
 ## How the quiz works
 

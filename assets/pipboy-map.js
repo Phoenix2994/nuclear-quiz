@@ -40,6 +40,13 @@ const TEXT = {
     complete: "MAPPA COMPLETATA", restart: "RICOMINCIA", restartConfirm: "Vuoi cancellare i luoghi scoperti su questa mappa?",
     needsQuestions: "Nessuna domanda disponibile per questo gioco.",
     highlight: "Evidenzia", all: "Tutti", tapMarker: "Tocca un'icona per vedere il luogo.", fact: "CURIOSITÀ",
+    cBlocks: "Una creatura ti sbarra la strada!", cLevel: "LV", cSpeed: { slow: "lenta", normal: "normale", fast: "veloce" }, cSpeedLabel: "Velocità",
+    cFight: "COMBATTI", cFlee: "FUGGI", cFleeWhy: "La creatura è più veloce di te: non puoi seminarla.", cFleeChance: "probabilità di fuga",
+    cAim: "Scegli dove colpire", cAp: "PA", cHp: "PS", cCrit: "CRITICO", cCritArmed: "CRITICO PRONTO", cExec: "ESEGUI", cUndo: "ANNULLA",
+    cMiss: "MANCATO", cCrippled: "STORPIATO", cCreatureTurn: "La creatura attacca!", cHitYou: "ti colpisce", cMissYou: "ti manca",
+    cWin: "CREATURA SCONFITTA", cWinSub: "Ora puoi esplorare il luogo: rispondi al quiz.", cLose: "SEI STATO SCONFITTO", cLoseSub: "Ti ritiri per curarti. Riprova.",
+    cFled: "SEI FUGGITO", cFledSub: "Sei scappato dalla creatura.", cFleeFail: "Fuga fallita!", cShot: "colpo", cQueue: "In coda", cYouHit: "Colpito", cCont: "CONTINUA",
+    defeatNote: "Sconfitto da", fledNote: "Sei fuggito da", critHint: "Si carica a ogni colpo (più in fretta con la Fortuna): il colpo critico colpisce sempre e fa doppio danno.",
     credit: "Mappe e posizioni: Fallout Wiki (CC BY-SA 3.0). Immagini di proprietà dei rispettivi titolari.",
     credit76: " Mappa di Fallout 76: Mappalachia.",
   },
@@ -64,6 +71,13 @@ const TEXT = {
     complete: "MAP COMPLETE", restart: "START OVER", restartConfirm: "Clear the places discovered on this map?",
     needsQuestions: "No questions available for this game.",
     highlight: "Highlight", all: "All", tapMarker: "Tap an icon to see the place.", fact: "TRIVIA",
+    cBlocks: "A creature blocks your way!", cLevel: "LV", cSpeed: { slow: "slow", normal: "normal", fast: "fast" }, cSpeedLabel: "Speed",
+    cFight: "FIGHT", cFlee: "FLEE", cFleeWhy: "The creature is faster than you: you cannot outrun it.", cFleeChance: "chance to escape",
+    cAim: "Choose where to hit", cAp: "AP", cHp: "HP", cCrit: "CRITICAL", cCritArmed: "CRITICAL READY", cExec: "EXECUTE", cUndo: "UNDO",
+    cMiss: "MISS", cCrippled: "CRIPPLED", cCreatureTurn: "The creature attacks!", cHitYou: "hits you", cMissYou: "misses you",
+    cWin: "CREATURE DEFEATED", cWinSub: "Now you can explore the place: answer the quiz.", cLose: "YOU WERE DEFEATED", cLoseSub: "You retreat to heal. Try again.",
+    cFled: "YOU ESCAPED", cFledSub: "You got away from the creature.", cFleeFail: "Escape failed!", cShot: "shot", cQueue: "Queued", cYouHit: "Hit", cCont: "CONTINUE",
+    defeatNote: "Defeated by", fledNote: "You escaped from", critHint: "It charges with every shot (faster with Luck): a critical shot always hits and does double damage.",
     credit: "Maps and positions: Fallout Wiki (CC BY-SA 3.0). Images belong to their respective owners.",
     credit76: " Fallout 76 map: Mappalachia.",
   },
@@ -91,6 +105,10 @@ const CAT_IT = {
 };
 
 const clean = (s) => s.trim();
+// test hook: window.__PM = { rng, creature, level } makes fights deterministic (see tools/smoke_combat.mjs)
+const testHook = () => (typeof window !== "undefined" ? window.__PM ?? {} : {});
+const rng = () => (testHook().rng ?? Math.random)();
+const sleep = (ms) => new Promise((r) => setTimeout(r, testHook().fast ? 5 : ms));
 const catName = (lang, cat) => (lang === "it" ? CAT_IT[cat] : null) ?? clean(cat);
 const wikiUrl = (m) => WIKI + encodeURIComponent(m.page.replace(/ /g, "_")).replace(/%2F/g, "/");
 // Some marker categories are the place's own name (Diamond City, Castle…): they are not a type, so never shown as a hint.
@@ -127,7 +145,119 @@ function saveSaved(s) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch { /* private mode */ }
 }
 
-export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
+
+// ---- combat engine (pure functions, no DOM: unit-tested by tools/test_combat.mjs)
+//
+// Rules, modelled on V.A.T.S. (Fallout 3 / 4): pick a body part, see its hit chance (capped at 95%), spend action points
+// per attack and queue several shots, hit a limb until its own health bar is empty to cripple it, a critical meter that
+// fills with every shot (faster with Luck) and turns the next shot into a guaranteed critical hit.
+// Level: a creature of level L has 8 + 10 L health, hits for 3 + 2 L and dodges 2 L %. A weak creature can die from one
+// good shot (a head shot, or a critical); stronger ones need several shots and hit back between your turns.
+const SPEED_VALUE = { slow: 3, normal: 5, fast: 8 };
+const AP_COST = 2; // action points per shot
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+// zones: box = [x, y, w, h] as fractions of the creature picture; acc = base hit chance; mult = damage multiplier;
+// share = fraction of the creature's health that cripples the part (0 = cannot be crippled); effect of a crippled part:
+// blind (head: the creature misses more), weak (arm/claw: it hits softer), slow (leg/wing: it is slower and easier to hit)
+const Z = (key, it, en, acc, mult, share, effect, box) => ({ key, label: { it, en }, acc, mult, share, effect, box });
+export const BODIES = {
+  humanoid: [Z("head", "Testa", "Head", 45, 2, 0.25, "blind", [0.3, 0, 0.4, 0.17]), Z("torso", "Torso", "Torso", 80, 1, 0, null, [0.24, 0.19, 0.52, 0.33]),
+    Z("armL", "Braccio sx", "Left arm", 55, 0.7, 0.3, "weak", [0, 0.19, 0.24, 0.4]), Z("armR", "Braccio dx", "Right arm", 55, 0.7, 0.3, "weak", [0.76, 0.19, 0.24, 0.4]),
+    Z("legL", "Gamba sx", "Left leg", 60, 0.8, 0.35, "slow", [0.2, 0.55, 0.3, 0.45]), Z("legR", "Gamba dx", "Right leg", 60, 0.8, 0.35, "slow", [0.5, 0.55, 0.3, 0.45])],
+  beast: [Z("head", "Testa", "Head", 45, 2, 0.25, "blind", [0, 0.05, 0.3, 0.5]), Z("torso", "Corpo", "Body", 80, 1, 0, null, [0.28, 0.1, 0.45, 0.5]),
+    Z("fore", "Zampe ant.", "Forelegs", 60, 0.8, 0.35, "slow", [0.1, 0.58, 0.28, 0.42]), Z("hind", "Zampe post.", "Hindlegs", 60, 0.8, 0.35, "slow", [0.6, 0.52, 0.32, 0.48])],
+  arthropod: [Z("head", "Testa", "Head", 45, 2, 0.25, "blind", [0, 0.2, 0.26, 0.55]), Z("torso", "Corpo", "Body", 80, 1, 0, null, [0.26, 0.15, 0.4, 0.65]),
+    Z("tail", "Addome", "Abdomen", 60, 1.2, 0.3, "weak", [0.66, 0.15, 0.34, 0.65]), Z("legs", "Zampe", "Legs", 60, 0.8, 0.35, "slow", [0.05, 0.78, 0.9, 0.22])],
+  flyer: [Z("head", "Testa", "Head", 45, 2, 0.25, "blind", [0.3, 0, 0.4, 0.2]), Z("torso", "Corpo", "Body", 80, 1, 0, null, [0.28, 0.2, 0.44, 0.55]),
+    Z("wingL", "Ala sx", "Left wing", 50, 0.7, 0.3, "slow", [0, 0, 0.28, 0.45]), Z("wingR", "Ala dx", "Right wing", 50, 0.7, 0.3, "slow", [0.72, 0, 0.28, 0.45])],
+  crab: [Z("head", "Testa", "Head", 45, 2, 0.25, "blind", [0.3, 0, 0.4, 0.22]), Z("torso", "Torso", "Torso", 80, 1, 0, null, [0.22, 0.22, 0.56, 0.35]),
+    Z("clawL", "Chela sx", "Left claw", 55, 0.7, 0.3, "weak", [0, 0.25, 0.22, 0.45]), Z("clawR", "Chela dx", "Right claw", 55, 0.7, 0.3, "weak", [0.78, 0.25, 0.22, 0.45]),
+    Z("legs", "Zampe", "Legs", 60, 0.8, 0.35, "slow", [0.22, 0.6, 0.56, 0.4])],
+  blob: [Z("head", "Cima", "Top", 45, 2, 0.25, "blind", [0.25, 0, 0.5, 0.25]), Z("torso", "Corpo", "Body", 80, 1, 0, null, [0.15, 0.25, 0.7, 0.4]),
+    Z("legs", "Tentacoli", "Tentacles", 60, 0.8, 0.35, "slow", [0.1, 0.65, 0.8, 0.35])],
+};
+// a wide "humanoid" picture (a crouching deathclaw) is laid out like a four-legged beast
+export const bodyOf = (c) => (c.body === "humanoid" && c.w / c.h > 1.2 ? "beast" : c.body in BODIES ? c.body : "humanoid");
+
+export function playerFrom(progress, stats) {
+  const lvl = stats?.level(progress) ?? 1, sp = (k) => stats?.special(progress, k) ?? 1;
+  return { level: lvl, hpMax: 40 + 8 * sp("E") + 5 * lvl, apMax: 6 + 2 * sp("A"), cost: AP_COST, dmg: 6 + 2 * lvl + sp("S"), per: sp("P"), agi: sp("A"), lck: sp("L") };
+}
+
+export function newFight(creature, level, player) {
+  const hpMax = 8 + 10 * level;
+  const parts = BODIES[bodyOf(creature)].map((z) => {
+    const max = z.share ? Math.max(1, Math.round(z.share * hpMax)) : 0;
+    return { ...z, max, hp: max, crippled: false };
+  });
+  return { c: { name: creature.name, level, hpMax, hp: hpMax, speed: creature.speed, parts }, p: { ...player, hp: player.hpMax, ap: player.apMax, crit: 0 }, round: 1 };
+}
+
+const effects = (c) => ({
+  blind: c.parts.some((p) => p.crippled && p.effect === "blind"),
+  weak: c.parts.filter((p) => p.crippled && p.effect === "weak").length,
+  slow: c.parts.filter((p) => p.crippled && p.effect === "slow").length,
+});
+export const creatureSpeed = (c) => Math.max(1, SPEED_VALUE[c.speed] - 2 * effects(c).slow);
+export const hitChance = (f, part) => {
+  const evasion = 2 * f.c.level + (f.c.speed === "fast" ? 6 : 0) - (effects(f.c).slow ? 6 : 0);
+  return clamp(Math.round(part.acc + 3 * f.p.per - evasion), 5, 95);
+};
+export const critGain = (p) => 14 + 3 * p.lck; // meter points per shot, 100 = full
+export const maxShots = (f) => Math.floor(f.p.apMax / f.p.cost);
+
+// A shot always consumes two random numbers (hit roll, damage roll) so that scripted tests are predictable.
+export function playerShot(f, partKey, crit, rnd) {
+  const part = f.c.parts.find((x) => x.key === partKey);
+  const chance = hitChance(f, part), hitRoll = rnd() * 100, dmgRoll = rnd();
+  const hit = crit || hitRoll < chance;
+  const dmg = hit ? Math.max(1, Math.round(f.p.dmg * part.mult * (crit ? 2 : 1) * (0.9 + dmgRoll * 0.2))) : 0;
+  f.p.ap -= f.p.cost;
+  f.p.crit = crit ? 0 : Math.min(100, f.p.crit + critGain(f.p));
+  f.c.hp = Math.max(0, f.c.hp - dmg);
+  let crippled = false;
+  if (hit && part.max) {
+    part.hp = Math.max(0, part.hp - dmg);
+    if (part.hp === 0 && !part.crippled) { part.crippled = true; crippled = true; }
+  }
+  return { part: partKey, hit, dmg, crit, crippled, killed: f.c.hp === 0, chance };
+}
+
+// the creature acts after your queue: 2 strikes if it is fast, 1 otherwise
+export function creatureTurn(f, rnd) {
+  const e = effects(f.c), out = [];
+  const strikes = f.c.speed === "fast" ? 2 : 1;
+  for (let i = 0; i < strikes && f.p.hp > 0; i++) {
+    const chance = clamp(72 - 3 * f.p.agi, 10, 95) * (e.blind ? 0.5 : 1), hitRoll = rnd() * 100, dmgRoll = rnd();
+    const hit = hitRoll < chance;
+    const dmg = hit ? Math.max(1, Math.round((3 + 2 * f.c.level) * (1 - 0.25 * Math.min(2, e.weak)) * (0.85 + dmgRoll * 0.3))) : 0;
+    f.p.hp = Math.max(0, f.p.hp - dmg);
+    out.push({ hit, dmg, chance: Math.round(chance) });
+  }
+  return out;
+}
+
+// fleeing is only possible if you are faster than the creature (its legs/wings crippled slow it down) or it is blind
+export function fleeInfo(f) {
+  const mine = 3 + f.p.agi, theirs = creatureSpeed(f.c), blind = effects(f.c).blind;
+  const allowed = mine > theirs || blind;
+  return { allowed, chance: blind ? 85 : clamp(60 + 10 * (mine - theirs), 20, 95), reason: allowed ? "" : "faster", mine, theirs };
+}
+export const tryFlee = (f, rnd) => rnd() * 100 < fleeInfo(f).chance;
+
+// which creature meets you: the stronger the map is explored, the tougher it gets
+export function pickCreature(pool, discovered, rnd = Math.random, forced = {}) {
+  const mapLevel = 1 + Math.floor(discovered / 5);
+  const forcedCreature = forced.creature && pool.find((c) => c.name === forced.creature);
+  const eligible = pool.filter((c) => c.level <= mapLevel + 3);
+  const list = eligible.length ? eligible : [...pool].sort((a, b) => a.level - b.level).slice(0, 3);
+  const creature = forcedCreature ?? list[Math.floor(rnd() * list.length)];
+  const level = forced.level ?? Math.max(creature.level, mapLevel + Math.floor(rnd() * 3) - 1);
+  return { creature, level };
+}
+
+export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
   const { useState, useRef, useEffect, useCallback, useMemo } = React;
   const h = React.createElement;
 
@@ -509,7 +639,169 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     return [...fresh, ...shuffle(pool.filter((q) => seen.has(q.id)))].slice(0, MISSION_QUESTIONS);
   }
 
-  function Discover({ mapKey, map, lang, onExit, store, saved, setSaved, facts }) {
+
+  // ---- the fight: creature appears, fight or flee, V.A.T.S.-style aiming, then the result
+
+  const copy = (x) => JSON.parse(JSON.stringify(x));
+
+  function Encounter({ creature, level, lang, store, onResult }) {
+    const T = TEXT[lang] ?? TEXT.en;
+    const player = useMemo(() => playerFrom(store.progress, stats), []);
+    const [f, setF] = useState(() => newFight(creature, level, player));
+    const [phase, setPhase] = useState("intro"); // intro | aim | exec | win | lose | fled
+    const [queue, setQueue] = useState([]); // [{ part, crit }]
+    const [armed, setArmed] = useState(false);
+    const [flash, setFlash] = useState(null);
+    const [hurt, setHurt] = useState(null);
+    const [lines, setLines] = useState([]);
+    const alive = useRef(true);
+    useEffect(() => () => { alive.current = false; }, []);
+    const say = (t) => setLines((l) => [...l.slice(-3), t]);
+
+    const critReady = f.p.crit >= 100 && !queue.some((q) => q.crit);
+    const apLeft = f.p.ap - queue.length * f.p.cost;
+    const info = fleeInfo(f);
+    const speedNow = creatureSpeed(f.c);
+    const predicted = queue.reduce((sum, q) => {
+      const part = f.c.parts.find((x) => x.key === q.part);
+      return sum + Math.round(f.p.dmg * part.mult * (q.crit ? 2 : 1));
+    }, 0);
+
+    function add(partKey) {
+      if (phase !== "aim" || apLeft < f.p.cost) return;
+      const crit = armed && critReady;
+      setQueue((q) => [...q, { part: partKey, crit }]);
+      if (crit) setArmed(false);
+    }
+    function undo() { setQueue((q) => { const last = q[q.length - 1]; if (last?.crit) setArmed(true); return q.slice(0, -1); }); }
+
+    async function creatureAttacks(st) {
+      say(T.cCreatureTurn);
+      for (const strike of creatureTurn(st, rng)) {
+        setF(copy(st)); setHurt(strike);
+        say(strike.hit ? `${st.c.name} ${T.cHitYou}: -${strike.dmg}` : `${st.c.name} ${T.cMissYou}`);
+        await sleep(650);
+        if (!alive.current) return false;
+        setHurt(null);
+      }
+      return true;
+    }
+
+    async function execute() {
+      const st = copy(f), shots = queue;
+      setPhase("exec"); setQueue([]); setArmed(false);
+      for (const shot of shots) {
+        const r = playerShot(st, shot.part, shot.crit, rng);
+        setF(copy(st)); setFlash(r);
+        const label = st.c.parts.find((x) => x.key === shot.part).label[lang] ?? "";
+        say(r.hit ? `${label}: -${r.dmg}${r.crit ? " (" + T.cCrit + ")" : ""}${r.crippled ? " · " + T.cCrippled : ""}` : `${label}: ${T.cMiss}`);
+        await sleep(750);
+        if (!alive.current) return;
+        setFlash(null);
+        if (r.killed) break;
+      }
+      if (st.c.hp <= 0) { setPhase("win"); return; }
+      if (!(await creatureAttacks(st))) return;
+      if (st.p.hp <= 0) { setPhase("lose"); return; }
+      st.p.ap = st.p.apMax; st.round += 1;
+      setF(copy(st)); setPhase("aim");
+    }
+
+    async function flee() {
+      if (!info.allowed || phase !== "aim" && phase !== "intro") return;
+      const st = copy(f);
+      if (tryFlee(st, rng)) { setPhase("fled"); return; }
+      setPhase("exec"); say(T.cFleeFail);
+      if (!(await creatureAttacks(st))) return;
+      if (st.p.hp <= 0) { setPhase("lose"); return; }
+      setF(copy(st)); setPhase("aim");
+    }
+
+    const hpPct = (v, max) => `${Math.max(0, Math.round((v / max) * 100))}%`;
+    const bar = (cls, v, max, extra) => h("div", { className: "vats-bar " + cls }, h("span", { style: { width: hpPct(v, max) } }), extra);
+
+    const ar = creature.w / creature.h;
+    const zones = f.c.parts.map((part) => {
+      const [x, y, w, hh] = part.box;
+      const hit = hitChance(f, part);
+      const queued = queue.filter((q) => q.part === part.key).length;
+      const fl = flash && flash.part === part.key ? flash : null;
+      return h("button", {
+        key: part.key, disabled: phase !== "aim" || apLeft < f.p.cost,
+        className: "vats-zone" + (part.crippled ? " crippled" : "") + (queued ? " queued" : "") + (fl ? (fl.hit ? " hit" : " miss") : ""),
+        style: { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${hh * 100}%` },
+        onClick: () => add(part.key), "aria-label": `${part.label[lang]} ${hit}%`,
+      },
+        h("b", null, part.crippled ? "✕" : `${hit}%`),
+        h("small", null, part.label[lang]),
+        part.max ? h("i", { className: "vats-limb" }, h("span", { style: { width: hpPct(part.hp, part.max) } })) : null,
+        queued ? h("em", null, queued) : null,
+        fl ? h("u", { className: "vats-dmg" }, fl.hit ? `-${fl.dmg}` : T.cMiss) : null);
+    });
+
+    const stage = h("div", { className: "vats-stage" },
+      h("div", { className: "vats-pic" + (hurt?.hit ? " struck" : ""), style: { "--ar": ar } },
+        h("img", { src: creature.img, alt: creature.name, draggable: false }),
+        phase === "intro" ? null : zones));
+
+    const header = h("div", { className: "vats-head" },
+      h("div", null, h("strong", null, creature.name), h("span", { className: "vats-lv" }, ` ${T.cLevel} ${level}`)),
+      h("span", { className: "muted" }, `${T.cSpeedLabel}: ${T.cSpeed[speedNow < SPEED_VALUE.normal ? (speedNow <= 3 ? "slow" : "normal") : f.c.speed === "fast" ? "fast" : "normal"]}`));
+
+    if (phase === "win" || phase === "lose" || phase === "fled") {
+      const kind = { win: ["cWin", "cWinSub", "ok"], lose: ["cLose", "cLoseSub", "ko"], fled: ["cFled", "cFledSub", "ok"] }[phase];
+      return h("div", { className: "screen quiz vats" },
+        h("div", { className: "topbar" }, h("span", { className: "muted" }, T.cBlocks)),
+        header, stage,
+        h("div", { className: "feedback " + kind[2] }, h("strong", null, T[kind[0]]), h("p", null, T[kind[1]]),
+          h("button", { className: "btn primary", onClick: () => onResult(phase === "win" ? "win" : phase === "lose" ? "lose" : "flee") }, T.cCont)));
+    }
+
+    const meter = h("div", { className: "vats-meter" },
+      h("span", { className: "muted" }, T.cCrit),
+      h("div", { className: "vats-bar crit" + (f.p.crit >= 100 ? " full" : "") }, h("span", { style: { width: `${Math.min(100, f.p.crit)}%` } })),
+      h("button", {
+        className: "btn vats-critbtn" + (armed ? " on" : ""), disabled: !critReady || phase !== "aim", title: T.critHint,
+        onClick: () => setArmed((a) => !a),
+      }, armed ? T.cCritArmed : T.cCrit));
+
+    if (phase === "intro") {
+      return h("div", { className: "screen quiz vats" },
+        h("div", { className: "topbar" },
+          h("button", { className: "link", onClick: () => onResult("abort"), "aria-label": T.close }, "✕"),
+          h("span", { className: "muted" }, T.cBlocks), h("span", null)),
+        header, stage,
+        h("div", { className: "vats-hp" }, bar("enemy", f.c.hp, f.c.hpMax), h("em", null, `${f.c.hp}/${f.c.hpMax}`)),
+        h("div", { className: "vats-choice" },
+          h("button", { className: "btn primary", "data-act": "fight", onClick: () => { setPhase("aim"); say(T.cAim); } }, "⚔ ", T.cFight),
+          h("button", { className: "btn", "data-act": "flee", disabled: !info.allowed, onClick: flee }, "➜ ", T.cFlee)),
+        h("p", { className: "muted center pm-hint" }, info.allowed ? `${T.cFleeChance}: ${info.chance}%` : T.cFleeWhy));
+    }
+
+    return h("div", { className: "screen quiz vats" + (hurt ? " hurt" : "") },
+      h("div", { className: "topbar" },
+        h("button", { className: "link", onClick: () => onResult("abort"), "aria-label": T.close }, "✕"),
+        h("span", { className: "muted" }, T.cAim), h("span", { className: "muted" }, `#${f.round}`)),
+      header,
+      h("div", { className: "vats-hp" }, bar("enemy", f.c.hp, f.c.hpMax,
+        predicted ? h("span", { className: "vats-pred", style: { width: hpPct(Math.min(predicted, f.c.hp), f.c.hpMax), left: hpPct(f.c.hp - Math.min(predicted, f.c.hp), f.c.hpMax) } }) : null),
+      h("em", null, `${f.c.hp}/${f.c.hpMax}`)),
+      stage,
+      h("div", { className: "vats-ap" },
+        h("span", { className: "muted" }, T.cAp),
+        h("div", { className: "vats-pips" }, Array.from({ length: maxShots(f) }, (_, i) =>
+          h("i", { key: i, className: i < queue.length ? "used" : i < f.p.ap / f.p.cost ? "free" : "spent" }))),
+        h("span", null, `${Math.max(0, apLeft)}/${f.p.apMax}`)),
+      meter,
+      h("div", { className: "vats-me" }, h("span", { className: "muted" }, T.cHp), bar("me", f.p.hp, f.p.hpMax), h("em", null, `${f.p.hp}/${f.p.hpMax}`)),
+      h("div", { className: "vats-actions" },
+        h("button", { className: "btn", disabled: phase !== "aim" || !queue.length, onClick: undo }, T.cUndo),
+        h("button", { className: "btn primary", "data-act": "exec", disabled: phase !== "aim" || !queue.length, onClick: execute }, "▶ ", T.cExec, queue.length ? ` (${queue.length})` : ""),
+        h("button", { className: "btn", "data-act": "flee", disabled: phase !== "aim" || !info.allowed, onClick: flee, title: info.allowed ? "" : T.cFleeWhy }, T.cFlee)),
+      h("div", { className: "vats-log" }, lines.map((l, i) => h("p", { key: i, className: "muted" }, l))));
+  }
+
+  function Discover({ mapKey, map, lang, onExit, store, saved, setSaved, facts, creatures }) {
     const T = TEXT[lang] ?? TEXT.en;
     const byId = useMemo(() => mapIndex(map), [map]);
     const radius = map.hit > 30 ? 130 : 105;
@@ -542,8 +834,19 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     }
     function travel() {
       const qs = pickMissionQuestions(store, map);
-      if (qs.length) setMission({ target: selected, qs });
-      else setNote({ kind: "noq" });
+      if (!qs.length) { setNote({ kind: "noq" }); return; }
+      const pool = creatures?.[map.group];
+      if (!pool?.length) { setMission({ stage: "quiz", target: selected, qs }); return; } // no creature data: quiz only
+      setMission({ stage: "fight", target: selected, qs, ...pickCreature(pool, foundTargets, rng, testHook()) });
+    }
+    function fightDone(result) {
+      const m = mission;
+      if (result === "win") setMission({ ...m, stage: "quiz" });
+      else {
+        setMission(null);
+        if (result === "lose") setNote({ kind: "defeat", name: m.creature.name });
+        else if (result === "flee") setNote({ kind: "fled", name: m.creature.name });
+      }
     }
     function missionDone({ correct, total: tot }) {
       const target = mission.target;
@@ -565,6 +868,9 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
       setView(frame(f, frontierOf(map, byId, f)));
     }
 
+    if (mission?.stage === "fight") {
+      return h(Encounter, { key: mission.target.id, creature: mission.creature, level: mission.level, lang, store, onResult: fightDone });
+    }
     if (mission) {
       return h(Quiz, {
         title: `${map.label} · ${T.mission}`, questions: mission.qs, onExit: () => setMission(null), onFinish: missionDone,
@@ -598,6 +904,8 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
       note?.kind === "failed" && h("div", { className: "feedback ko" },
         h("strong", null, T.failed, ` (${note.correct}/${note.total})`), h("p", null, T.retry)),
       note?.kind === "noq" && h("div", { className: "feedback ko" }, h("p", null, T.needsQuestions)),
+      note?.kind === "defeat" && h("div", { className: "feedback ko" }, h("strong", null, `${T.defeatNote} ${note.name}`), h("p", null, T.cLoseSub)),
+      note?.kind === "fled" && h("div", { className: "feedback ok" }, h("strong", null, `${T.fledNote} ${note.name}`), h("p", null, T.retry)),
       selected && !complete && h("div", { className: "pm-dest" },
         h("div", null, h("strong", null, T.unknown), typeOf(map, lang, selected) && h("p", { className: "muted" }, typeOf(map, lang, selected))),
         h("button", { className: "btn primary", onClick: travel }, "▶ ", T.travel, " · ", MISSION_QUESTIONS, " ", T.questions)),
@@ -654,6 +962,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
   const loadData = () => (dataPromise ??= Promise.all([
     json("./data/maps.json"),
     json("./data/place-facts.json").catch(() => ({})), // curiosities are optional
+    json("./data/creatures.json").catch(() => ({})), // without creatures the discovery missions are quiz only
   ]).catch((e) => { dataPromise = null; throw e; }));
 
   return function MapTab() {
@@ -662,13 +971,14 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     const T = TEXT[lang] ?? TEXT.en;
     const [maps, setMaps] = useState(null);
     const [facts, setFacts] = useState({});
+    const [creatures, setCreatures] = useState({});
     const [failed, setFailed] = useState(false);
     const [game, setGame] = useState("fo4");
     const [mode, setMode] = useState(null);
     const [previewView, setPreviewView] = useState(null);
     const [saved, setSaved] = useState(loadSaved);
 
-    useEffect(() => { loadData().then(([m, f]) => { setMaps(m); setFacts(f); }).catch(() => setFailed(true)); }, []);
+    useEffect(() => { loadData().then(([m, f, c]) => { setMaps(m); setFacts(f); setCreatures(c); }).catch(() => setFailed(true)); }, []);
     const map = maps && maps[game];
     useEffect(() => { if (map) setPreviewView(bboxView(map.bbox)); }, [game, maps]);
     const areas = map ? Object.keys(maps).filter((k) => maps[k].group === map.group) : [];
@@ -677,7 +987,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     if (!map || !previewView) return h("div", { className: "screen" }, h("p", { className: "muted" }, T.loading));
 
     const exit = () => setMode(null);
-    const props = { mapKey: game, map, lang, store, saved, setSaved, facts, onExit: exit };
+    const props = { mapKey: game, map, lang, store, saved, setSaved, facts, creatures, onExit: exit };
     if (mode === "find") return h(FindQuiz, { key: game + mode, ...props });
     if (mode === "place") return h(ChoiceQuiz, { key: game + mode, ...props, kind: "place" });
     if (mode === "icon") return h(ChoiceQuiz, { key: game + mode, ...props, kind: "icon" });

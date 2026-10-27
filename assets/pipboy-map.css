@@ -42,3 +42,57 @@
 .pm-fact{border:1px dashed var(--fg-dim);border-radius:4px;padding:8px 10px;background:rgba(77,255,106,.05)}
 .pm-fact strong{display:block;font-size:12px;letter-spacing:.12em;color:var(--warn);text-shadow:none}
 .pm-fact p{margin:4px 0 0;font-size:14px;line-height:1.4}
+
+/* V.A.T.S.-style fight */
+.vats{gap:8px}
+.vats-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.vats-lv{color:var(--warn);text-shadow:none}
+.vats-stage{display:flex;justify-content:center;border:1px solid var(--fg-dim);border-radius:4px;background:radial-gradient(ellipse at center,#06200c 0%,#020a04 80%);padding:8px;overflow:hidden}
+.vats-pic{position:relative;width:min(100%,calc(40vh * var(--ar)));aspect-ratio:var(--ar);min-width:150px}
+.vats-pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;user-select:none;pointer-events:none;
+  filter:grayscale(1) sepia(1) hue-rotate(55deg) saturate(3) brightness(.85) contrast(1.1);opacity:.9}
+.vats-pic.struck{animation:vats-shake .35s}
+.vats-zone{position:absolute;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:0;padding:2px 4px;overflow:visible;
+  border:1.5px solid var(--fg);background:rgba(77,255,106,.1);color:var(--fg);font:inherit;cursor:pointer;border-radius:3px;text-shadow:0 0 4px rgba(77,255,106,.7);
+  transition:background .15s}
+.vats-zone:hover:not(:disabled){background:rgba(77,255,106,.28)}
+.vats-zone:disabled{cursor:default}
+.vats-zone b{font-size:15px;line-height:1.1}
+.vats-zone small{font-size:9px;letter-spacing:.04em;opacity:.85;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vats-limb{position:absolute;left:3px;right:3px;bottom:3px;height:4px;border:1px solid var(--fg-dim);display:block}
+.vats-limb span{display:block;height:100%;background:var(--fg)}
+.vats-zone em{position:absolute;top:-8px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--warn);color:#000;font-style:normal;font-size:12px;font-weight:700;display:grid;place-items:center;text-shadow:none}
+.vats-zone.queued{background:rgba(255,179,71,.28);border-color:var(--warn);color:var(--warn);text-shadow:none}
+.vats-zone.crippled{border-color:var(--bad);color:var(--bad);background:rgba(255,93,77,.12);text-shadow:none}
+.vats-zone.hit{animation:vats-hit .6s}
+.vats-zone.miss{animation:vats-miss .6s}
+.vats-dmg{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font-style:normal;text-decoration:none;font-weight:700;font-size:22px;color:#fff;text-shadow:0 0 6px var(--bad),0 0 2px #000;animation:vats-float .75s ease-out forwards;pointer-events:none;white-space:nowrap}
+.vats-hp,.vats-me,.vats-ap,.vats-meter{display:flex;align-items:center;gap:8px}
+.vats-hp .vats-bar,.vats-me .vats-bar{flex:1}
+.vats-hp em,.vats-me em,.vats-bar em{font-style:normal;font-size:12px;min-width:56px;text-align:right}
+.vats-bar{position:relative;height:12px;border:1px solid var(--fg-dim);border-radius:3px;overflow:hidden;background:#020a04}
+.vats-bar>span{position:absolute;left:0;top:0;bottom:0;background:var(--fg);transition:width .35s}
+.vats-bar.enemy>span{background:var(--bad)}
+.vats-bar.crit>span{background:var(--warn)}
+.vats-bar.crit.full{box-shadow:0 0 8px var(--warn)}
+.vats-bar.enemy>.vats-pred,.vats-bar>.vats-pred{background:repeating-linear-gradient(45deg,#fff 0 3px,#999 3px 6px);opacity:.75;transition:none}
+.vats-pips{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+.vats-pips i{width:22px;height:12px;border:1px solid var(--fg-dim);border-radius:2px;display:block}
+.vats-pips i.free{background:var(--fg)}
+.vats-pips i.used{background:var(--warn);border-color:var(--warn)}
+.vats-pips i.spent{opacity:.3}
+.vats-meter .vats-bar{flex:1}
+.vats-critbtn{width:auto;padding:6px 10px;font-size:12px}
+.vats-critbtn.on{background:var(--warn);color:#000;text-shadow:none}
+.vats-actions,.vats-choice{display:flex;gap:8px}
+.vats-actions .btn,.vats-choice .btn{flex:1;padding:12px 6px}
+.vats-actions .btn.primary{flex:2}
+.vats-log{min-height:48px}
+.vats-log p{margin:0;font-size:12px}
+.vats.hurt{animation:vats-hurt .5s}
+@keyframes vats-hit{0%{background:rgba(255,255,255,.7)}100%{background:rgba(77,255,106,.1)}}
+@keyframes vats-miss{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes vats-float{0%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-34px)}}
+@keyframes vats-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+@keyframes vats-hurt{0%,100%{box-shadow:none}30%{box-shadow:inset 0 0 40px rgba(255,93,77,.6)}}
+@media (prefers-reduced-motion:reduce){.vats-zone.hit,.vats-zone.miss,.vats-pic.struck,.vats.hurt,.vats-dmg{animation:none}}
