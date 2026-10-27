@@ -17,7 +17,7 @@ async function open(scenario) {
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.addInitScript((s) => {
     const v = s.dice; let i = 0;
-    window.__PM = { creature: s.creature, fast: true, rng: () => v[i++ % v.length] };
+    window.__PM = { creature: s.creature, fast: true, encounter: true, rng: () => v[i++ % v.length] };
   }, scenario);
   await page.goto(base);
   await page.waitForSelector(".tabs");

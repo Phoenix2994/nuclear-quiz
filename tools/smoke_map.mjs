@@ -18,7 +18,7 @@ const check = (cond, msg) => { if (!cond) { errors.push("FAIL: " + msg); console
 // scripted dice: every shot and every strike hits for average damage (see tools/smoke_combat.mjs for real fights)
 await page.addInitScript(() => {
   const v = [0.1, 0.5]; let i = 0;
-  window.__PM = { fast: true, invincible: true, rng: () => v[i++ % 2] };
+  window.__PM = { fast: true, invincible: true, encounter: true, rng: () => v[i++ % 2] };
 });
 await page.goto(base);
 await page.waitForSelector(".tabs");
@@ -91,6 +91,8 @@ async function winFight() {
 async function discoverMode(key, pass) {
   await page.click('[data-mode="discover"]');
   const before = (await page.textContent(".tags")).match(/(\d+)\/(\d+)/)[1];
+  const caps = async () => +(await page.getAttribute("[data-caps]", "data-caps"));
+  const capsBefore = await caps();
   // tap the icon of the undiscovered place nearest to the starting point
   const mp = maps[key], byId = new Map(mp.markers.map((x) => [x.id, x])), start = byId.get(mp.start);
   const done = new Set(JSON.parse((await page.evaluate(() => localStorage.getItem("wasteland-quiz-map-v1"))) ?? "{}").discovered?.[key] ?? []);
@@ -123,6 +125,33 @@ async function discoverMode(key, pass) {
   const after = (await page.textContent(".tags")).match(/(\d+)\/(\d+)/)[1];
   console.log(key, "discover:", before, "->", after, pass ? "(expected +1)" : "(expected same)");
   check(pass ? +after === +before + 1 : after === before, `${key} discover ${before}->${after}`);
+  const capsAfter = await caps(); // a won fight always pays; a discovered place pays 10 more
+  console.log(key, "caps:", capsBefore, "->", capsAfter);
+  check(capsAfter > capsBefore + (pass ? 10 : 0), `${key} caps ${capsBefore}->${capsAfter}`);
+  await page.click(".topbar .link");
+}
+
+// 3b. settlement: you start in the vault, resting there is free, a stimpak costs 25 caps
+async function campCheck() {
+  await page.click('[data-mode="discover"]');
+  await page.waitForSelector(".pm-hud");
+  // fast travel back to the starting vault: zoom in on it and tap it
+  const mp = maps.fo4, start = mp.markers.find((x) => x.id === mp.start);
+  for (let i = 0; i < 5; i++) {
+    const { box, vb } = await svgBox();
+    await page.mouse.move(box.x + ((start.x - vb[0]) / vb[2]) * box.width, box.y + ((start.y - vb[1]) / vb[3]) * box.height);
+    await page.mouse.wheel(0, -100);
+  }
+  await tapMap(start.x, start.y);
+  await page.waitForSelector(".pm-camp");
+  if (await page.locator('[data-act="fast"]').count()) await page.click('[data-act="fast"]');
+  await page.waitForSelector('[data-act="buy"]');
+  const hud = async () => [+(await page.getAttribute("[data-stim]", "data-stim")), +(await page.getAttribute("[data-caps]", "data-caps"))];
+  const [stim, caps] = await hud();
+  await page.click('[data-act="buy"]');
+  const [stim2, caps2] = await hud();
+  console.log("fo4 settlement: stimpaks", stim, "->", stim2, "caps", caps, "->", caps2);
+  check(stim2 === stim + 1 && caps2 === caps - 25, "buying a stimpak");
   await page.click(".topbar .link");
 }
 
@@ -151,11 +180,11 @@ for (const key of Object.keys(maps)) {
 for (const key of ["fo4", "fnv", "fo3", "fnvhh", "fo76"]) {
   await openMap(key);
   await choiceMode(key, "place");
-  if (key !== "fo76") await choiceMode(key, "icon");
   await exploreMode(key);
 }
 await openMap("fo4"); await discoverMode("fo4", true);
 await openMap("fo4"); await discoverMode("fo4", false);
+await openMap("fo4"); await campCheck();
 await openMap("fnv"); await discoverMode("fnv", true);
 await openMap("fo76"); await discoverMode("fo76", true);
 

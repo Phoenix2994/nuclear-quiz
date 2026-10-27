@@ -130,3 +130,18 @@
 .vats-est{font-size:11px;margin:0}
 .pm-info{display:flex;flex-direction:column;gap:8px}
 .pm-desc{margin:0;font-size:14px;line-height:1.4}
+/* adventure (discovery mode): health / stimpaks / caps bar, settlements, your position */
+.pm-hud{display:flex;align-items:center;gap:8px;font-size:13px}
+.pm-hud .vats-bar{flex:1;min-width:60px}
+.pm-hud em{font-style:normal}
+.pm-hud-item{color:var(--warn);text-shadow:none;white-space:nowrap}
+.pm-at{margin:0;font-size:12px}
+.pm-gain{color:var(--warn);text-shadow:none}
+.pm-camp{display:flex;flex-direction:column;gap:8px;border:1px solid var(--fg-dim);border-radius:4px;padding:10px 12px}
+.pm-camp p{margin:2px 0 0}
+.pm-camp .fb-actions{flex-wrap:wrap}
+.pm-camp-mark{fill:none;stroke:var(--fg);opacity:.7}
+.pm-camp-mark.on{stroke:var(--warn);opacity:1}
+.pm-you{fill:var(--warn);stroke:#020a04}
+.vats-stim{align-self:center;font-size:13px}
+.vats-stim em{font-style:normal;color:var(--warn)}
