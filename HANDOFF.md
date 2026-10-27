@@ -106,6 +106,14 @@ the game's "creatures" category:
   each entry carrying the sentence it comes from (`because`). Encoded so far: mirelurk (shell on the body, small face),
   radscorpion (no weak point, legs resist), cazador (no head bonus), FO4 deathclaw (belly is the weak spot, scales resist),
   FO76 mirelurk hunter / queen / cave cricket. Crippled antennae (ants, mantises, cazador) are a zone: frenzy = it fights blindly.
+- **Fallout 76 weak and tough spots are the game's own figures**: the wiki table "Body part multipliers" (page "Fallout 76 combat",
+  taken from the game's body part data) is parsed by `fo76_spots` and overrides the hand-written entries (e.g. mirelurk: head x2,
+  arms x0.5, shell x0.25; deathclaw: belly x2). Zone names map to roles (head/face -> head, belly/shell/body -> torso, arm/claw -> arms).
+- **FO3, New Vegas and FO4**: no structured public source exists. The real data is the game's *Body Part Data* records
+  (per creature: part names, V.A.T.S. hit chance, damage multiplier, cripple threshold), readable only from the game files with
+  xEdit / the GECK / Creation Kit. If you can export them (xEdit "Export to JSON" / a BPTD script on `Fallout3.esm`, `FalloutNV.esm`,
+  `Fallout4.esm`), a small script can replace `BODIES` and the multipliers with exact per-creature zones. YouTube footage was
+  tried and is not available from the build environment (downloads need a signed-in account), so it was not used.
 - Not in the wiki, so a fallback that is flagged `derived` in the data and shown with `*` in the UI: level for 8 creatures,
   health/damage of most FO76 creatures (the FO76 pages have no stats table: health `8 + 10 x level`, damage `2 + 1.5 x level`),
   speed (read from words like "fast" / "slow", else `SPEED_FALLBACK`), and the body type of 6 creatures (default humanoid).

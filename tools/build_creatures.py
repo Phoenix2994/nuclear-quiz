@@ -141,6 +141,36 @@ def notes_of(text):
     return [x for _, x in cand[:2]]
 
 
+FO76_NAMES = {"Mongrel": "Wild mongrel", "Mole miner": "Mole miner", "Super mutant behemoth": "Super mutant behemoth"}
+SPOT_ROLE = [(r"^(head|face|left head|right head|combat inhibitor)", "head"), (r"^(belly|body|shell)", "torso"), (r"^(arm|claw)", "arms"), (r"^leg", "legs")]
+
+
+def fo76_spots(cache):
+    """Weak and tough spots of Fallout 76 creatures: the "Body part multipliers" table of the wiki page "Fallout 76 combat"
+    (values taken from the game's body part data). Returns {creature: {role: damage multiplier}}."""
+    path = os.path.join(cache, "fo76-combat-wikitext.txt")
+    if not os.path.exists(path):
+        open(path, "w").write(api(action="parse", page="Fallout 76 combat", prop="wikitext")["parse"]["wikitext"]["*"])
+    t = open(path).read()
+    i = t.find("==Body part multipliers==")
+    table = t[i:t.find("|}", t.find('{|class="va-table', i))]
+    out = {}
+    for row in re.split(r"\n\|-\s*\n", table)[2:]:
+        c = [re.sub(r'^style="[^"]*"\|', "", x.strip()) for x in re.split(r"\n\s*\|", row.strip()) if x.strip()]
+        c = [re.sub(r"^\|", "", x) for x in c] + [""] * 5
+        names = re.findall(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", c[0]) or [re.sub(r"\[\[|\]\]", "", c[0])]
+        spots = {}
+        for place, mult in ((c[1], c[2]), (c[3], c[4])):
+            labels = [re.sub(r"&nbsp;", "", x).strip() for x in re.split(r"<br\s*/?>", place)]
+            for label, m in zip([x for x in labels if x], [float(v) for v in re.findall(r"×\s*([\d.]+)", mult)]):
+                role = next((r for pat, r in SPOT_ROLE if re.search(pat, label, re.I)), None)
+                if role and role not in spots:
+                    spots[role] = (m, label)
+        for n in names:
+            out[n.strip()] = spots
+    return out
+
+
 def absorb_of(game, dr, dt):
     """Share of the damage the creature's armour absorbs, from the wiki figures: damage resistance (a percentage in
     FO3/FNV, a rating in FO4/FO76) and the damage threshold (FNV)."""
@@ -157,6 +187,7 @@ def main():
     os.makedirs(os.path.join(ROOT, "img/creatures"), exist_ok=True)
     src = os.path.join(ROOT, "tools/sources")
     weakpoints = json.load(open(os.path.join(src, "creature-weakpoints.json"))) if os.path.exists(os.path.join(src, "creature-weakpoints.json")) else {}
+    spots76 = fo76_spots(cache)
     notes_it = json.load(open(os.path.join(src, "creature-notes-it.json"))) if os.path.exists(os.path.join(src, "creature-notes-it.json")) else {}
 
     pages_path = os.path.join(cache, "creature-pages.json")
@@ -253,7 +284,11 @@ def main():
                 derived.append("hp")
             if not dmg:
                 derived.append("dmg")
-            wp = weakpoints.get(t, {})
+            wp = dict(weakpoints.get(t, {}))
+            sp = spots76.get(FO76_NAMES.get(name, name)) if g == "fo76" else None
+            if sp:  # the game's own figures beat anything hand-written
+                wp["mult"] = {r: m for r, (m, _) in sp.items()}
+                wp["because"] = "Fallout 76 wiki table of body part multipliers: " + ", ".join(f"{lab} x{m:g}" for _, (m, lab) in sp.items())
             rec = {"id": cid, "name": name, "page": t, "img": dst, "w": im.width, "h": im.height, "level": level, "speed": speed, "body": body,
                    "hp": hp, "dmg": dmg, "absorb": wp.get("absorb", absorb_of(g, dr, dt)), "dr": dr, "dt": dt,
                    "antennae": bool(re.search(r"(?i)antennae.{0,80}crippl\w*.{0,80}fren|crippl\w*.{0,60}antennae.{0,80}fren", text.replace("\n", " "))),
