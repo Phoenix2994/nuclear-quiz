@@ -30,8 +30,8 @@
 .pm-chip-label{align-self:center;font-size:12px;white-space:nowrap}
 /* discover the map */
 .pm-fog-rect{fill:#010603;fill-opacity:.94;pointer-events:none}
-.pm-fr-box{fill:rgba(255,179,71,.1);stroke:var(--warn);stroke-width:2.2;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 3px rgba(255,179,71,.8));animation:pm-blink 1.4s ease-in-out infinite}
-.pm-frontier.on .pm-fr-box{fill:rgba(255,179,71,.45);animation:none}
+.pm-fr-box{fill:rgba(0,255,0,.27);stroke:#00ff00;animation:pm-blink 1.4s ease-in-out infinite}
+.pm-frontier.on .pm-fr-box{fill:rgba(0,255,0,.6);animation:none}
 .pm-dest{display:flex;flex-direction:column;gap:8px;border:1px solid var(--warn);border-radius:4px;padding:10px 12px}
 .pm-dest p{margin:2px 0 0}
 .pm-restart{border-color:var(--fg-dim);color:var(--fg-dim);padding:10px;font-size:13px}

@@ -60,7 +60,7 @@ Perception (S.P.E.C.I.A.L.) point work like any other quiz. `store.completeSessi
 |---|---|
 | Find the place | 10 rounds: tap the named place. Points by distance (100 within half the hit radius, then linear to 0 at 7.5x); counts as correct, for XP, within the hit radius. Best score per map is kept. |
 | Which place is this? | A place is highlighted, pick its name among 4 (distractors: same category / nearby). |
-| Discover the map | Fog of war. Starts at the game's first vault (`start` in `data/maps.json`, table `START` in the build script). The 4 nearest undiscovered places appear as empty-square markers; pick one and "travel": a 3-question mission built from the app's own questions for that game (unseen first). All 3 answers must be right (`MISSION_PASS`) to discover the place and lift the fog around it; otherwise try again. Progress is saved per map. |
+| Discover the map | Fog of war. Starts at the game's first vault (`start` in `data/maps.json`, table `START` in the build script). The 4 nearest undiscovered places appear as empty green-circle markers (the wiki's `Icon FOx Map Circle`, redrawn as SVG); pick one and "travel": a 3-question mission built from the app's own questions for that game (unseen first). All 3 answers must be right (`MISSION_PASS`) to discover the place and lift the fog around it; otherwise try again. Progress is saved per map. |
 | Explorer | Browse freely; tap an icon for name, type and wiki link; highlight a category. |
 | Which icon is this? | A zoomed icon is circled, pick the kind of place (only generic categories, never a place's own name). Not offered for FO76 (its icons are pictures, not glyphs). |
 

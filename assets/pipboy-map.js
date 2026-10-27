@@ -541,10 +541,8 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     const overlay = (size) => h("g", null,
       h(Fog, { points: [...found].map((id) => byId.get(id)), radius }),
       frontier.map((m) => h("g", { key: m.id, className: "pm-frontier" + (m.id === sel ? " on" : "") },
-        // the classic empty map marker: an icon-sized hollow square
-        h("rect", {
-          x: m.x - size * 0.5, y: m.y - size * 0.5, width: size, height: size, rx: size * 0.12, className: "pm-fr-box",
-        }))),
+        // the classic empty map marker (the Fallout wiki's "FOx map circle"): a green ring with a faint fill
+        h("circle", { cx: m.x, cy: m.y, r: size * 0.46, className: "pm-fr-box", style: { strokeWidth: size * 0.075 } }))),
       note?.kind === "found" && h("g", { className: "pm-result" },
         h("circle", { cx: note.m.x, cy: note.m.y, r: size * 0.8, className: "pm-pulse" }),
         h(Label, { target: note.m, map: { hit: size * 0.9 }, view })));

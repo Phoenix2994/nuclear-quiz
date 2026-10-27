@@ -76,7 +76,7 @@ async function discoverMode(key, pass) {
   // tap a "?" marker
   const q = page.locator(".pm-frontier").first();
   await q.waitFor();
-  const b = await q.locator("rect").boundingBox();
+  const b = await q.locator("circle").boundingBox();
   await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
   await page.waitForSelector(".pm-dest");
   await page.click(".pm-dest .btn.primary");
