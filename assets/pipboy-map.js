@@ -879,8 +879,8 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     function travel() {
       const qs = pickMissionQuestions(store, map);
       if (!qs.length) { setNote({ kind: "noq" }); return; }
-      const pool = creatures?.[map.group]?.filter((c) => !c.pending);
-      if (!pool?.length) { setMission({ stage: "quiz", target: selected, qs }); return; } // no creature data: quiz only
+      const pool = creatures?.[map.group]; // pickCreature leaves out the creatures whose weak points are not known yet
+      if (!pool?.some((c) => !c.pending)) { setMission({ stage: "quiz", target: selected, qs }); return; } // no creature data: quiz only
       setMission({ stage: "fight", target: selected, qs, ...pickCreature(pool, foundTargets, rng, testHook()) });
     }
     function fightDone(result) {
