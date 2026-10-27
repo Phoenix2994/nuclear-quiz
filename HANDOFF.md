@@ -14,6 +14,7 @@ dropping the bundle patch.
 | `data/maps.json` | Markers, coordinates, targets, icon paths for FO3 / FNV / FO4 / FO76 (generated) | Copy to the app's static/public folder |
 | `img/maps/*.webp`, `img/maps/icons/*.png` | Map images and marker glyphs (generated) | Copy to static/public |
 | `tools/build_maps.py` | Regenerates the two rows above from the Fallout Wiki | Keep in repo (`python3 tools/build_maps.py`, needs `curl`, Pillow and `opencv-python-headless`) |
+| `img/quiz-icons/*.png`, `tools/build_icon_questions.py` | Clean map icons and the "what kind of place does this icon mark?" questions (ids `icon-*`) appended to `data/questions-*.json` | Rerun the script after rebuilding the question banks |
 | `tools/sources/*.jpg` | In-game Pip-Boy maps with icons for FO3 and FNV (input of the build script) | Keep with the tool |
 | `data/place-facts.json` | One curiosity (EN + IT) per place that has one: 105 places (generated) | Copy to static/public |
 | `data/place-descriptions.json` | A description (EN + IT) per place: the opening of its wiki page, 337 places (generated) | Copy to static/public |
@@ -69,7 +70,6 @@ Perception (S.P.E.C.I.A.L.) point work like any other quiz. `store.completeSessi
 | Which place is this? | A place is highlighted, pick its name among 4 (distractors: same category / nearby). |
 | Discover the map | Fog of war. Starts at the game's first vault (`start` in `data/maps.json`, table `START` in the build script). The 4 nearest undiscovered places appear as empty green-circle markers (the wiki's `Icon FOx Map Circle`, redrawn as SVG); pick one and "travel": a 3-question mission built from the app's own questions for that game (unseen first). The questions get harder with the discovered share of the map (`missionLevel`: under 15% only level 1, under 50% levels 1-2, then 1-3; the `livello` of each question in the app data), unseen ones first. All 3 answers must be right (`MISSION_PASS`) to discover the place and lift the fog around it; otherwise try again. Progress is saved per map. |
 | Explorer | Browse freely; tap an icon for name, type and wiki link; highlight a category. |
-| Which icon is this? | A zoomed icon is circled, pick the kind of place (only generic categories, never a place's own name). Not offered for FO76 (its icons are pictures, not glyphs). |
 
 Icons of places still to discover stay visible but in another colour (`Layers` / `reveal` in the module); the map image
 itself is never altered:
@@ -213,3 +213,15 @@ python3 tools/build_maps.py          # regenerate data + images (cache in .map-c
 
 Marker names, coordinates and map images come from the Fallout Wiki interactive maps (CC BY-SA 3.0); game
 images belong to their owners; the FO76 map image is credited to Mappalachia. See README.
+
+## Map icon questions (normal quizzes)
+
+The "which icon is this?" mode was moved out of the MAP tab into the normal quizzes: `tools/build_icon_questions.py`
+writes one question per generic marker category (at least 2 markers, no proper names) for FO3, FNV, FO4 and FO76,
+kind `img`, `tipo` `luogo`, level 1 (2 for the FO3/FNV settlement sizes), in English and Italian, with a clean icon
+(`img/quiz-icons/`) instead of a crop of the map (some FO4 markers have no icon drawn on the wiki map, e.g. Vault 114).
+Icons: FO3/FNV the wiki's gamebryo plates tinted green/amber; FO4 the glyphs cropped from the map plus the FO76 marker
+sprites that reuse the FO4 ones, tinted green; FO76 the wiki icons as they are. Categories whose names are too close are
+never offered together (`CLOSE`). The questions have no `articleId`, so they unlock no database entry. A rebuild of
+`data/questions-*.json` from the original sources drops them: run the script again (it replaces the `icon-*` ids and
+updates `sizes` in `data/trivia.json`).

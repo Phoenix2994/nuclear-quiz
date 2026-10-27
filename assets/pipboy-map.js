@@ -25,10 +25,9 @@ const TEXT = {
     mPlace: "CHE LUOGO È?", mPlaceSub: "Riconosci il luogo evidenziato",
     mDiscover: "MAPPA DA SCOPRIRE", mDiscoverSub: "Parti dal vault e scopri la mappa con i quiz",
     mExplore: "ESPLORATORE", mExploreSub: "Sfoglia la mappa liberamente",
-    mIcon: "CHE ICONA È?", mIconSub: "Riconosci il tipo di luogo dall'icona",
     find: "Trova sulla mappa", tapHint: "Tocca la mappa per rispondere", kind: "DOVE?",
-    which: "Che luogo è quello evidenziato?", whichIcon: "Che cosa indica l'icona cerchiata?",
-    kindPlace: "CHE LUOGO?", kindIcon: "CHE ICONA?",
+    which: "Che luogo è quello evidenziato?",
+    kindPlace: "CHE LUOGO?",
     correct: "CORRETTO", wrong: "SBAGLIATO", next: "AVANTI", finish: "FINE", close: "Chiudi",
     you: "Hai toccato", pts: "pt", done: "SESSIONE COMPLETATA", answers: "risposte corrette",
     score: "punti", newRecord: "NUOVO RECORD", again: "GIOCA ANCORA", cont: "CONTINUA", wiki: "Wiki",
@@ -58,10 +57,9 @@ const TEXT = {
     mPlace: "WHICH PLACE IS THIS?", mPlaceSub: "Recognise the highlighted place",
     mDiscover: "DISCOVER THE MAP", mDiscoverSub: "Start at the vault and uncover the map with quizzes",
     mExplore: "EXPLORER", mExploreSub: "Browse the map freely",
-    mIcon: "WHICH ICON IS THIS?", mIconSub: "Tell the kind of place from its icon",
     find: "Find on the map", tapHint: "Tap the map to answer", kind: "WHERE?",
-    which: "Which place is highlighted?", whichIcon: "What does the circled icon stand for?",
-    kindPlace: "WHICH PLACE?", kindIcon: "WHICH ICON?",
+    which: "Which place is highlighted?",
+    kindPlace: "WHICH PLACE?",
     correct: "CORRECT", wrong: "WRONG", next: "NEXT", finish: "FINISH", close: "Close",
     you: "You tapped", pts: "pt", done: "SESSION COMPLETE", answers: "correct answers",
     score: "points", newRecord: "NEW BEST", again: "PLAY AGAIN", cont: "CONTINUE", wiki: "Wiki",
@@ -105,7 +103,7 @@ const CAT_IT = {
   "Military ": "Base militare", Monuments: "Monumento", Offices: "Uffici", "Public workshops": "Officina pubblica",
   "Red Rocket stations": "Stazione Red Rocket", "Satellite stations": "Stazione satellitare", Towns: "Cittadina",
   "Train stations": "Stazione ferroviaria", "Water Park": "Parco acquatico", "Winter sports": "Sport invernali", Airfields: "Campo d'aviazione",
-  " Cult locations": "Luogo di culto", "Industrial ": "Impianto industriale", Monorail: "Monorotaia",
+  " Cult locations": "Covo di cultisti", "Industrial ": "Impianto industriale", Monorail: "Monorotaia",
 };
 
 const clean = (s) => s.trim();
@@ -563,35 +561,25 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
           h("button", { className: "btn primary", onClick: next }, i + 1 < rounds.length ? T.next : T.finish))));
   }
 
-  // ---- modes 2 and 5: multiple choice on the map ("which place" / "which icon")
+  // ---- mode 2: multiple choice on the map ("which place")
 
-  function buildChoice(map, lang, kind) {
+  function buildChoice(map) {
     const byId = mapIndex(map);
-    let pool = map.targets.map((id) => byId.get(id));
-    if (kind === "icon") { // only generic types: a category with a handful of markers, not a place's own name
-      pool = pool.filter((m) => isGeneric(map, m.cat));
-    }
+    const pool = map.targets.map((id) => byId.get(id));
     return shuffle(pool).slice(0, ROUNDS).map((target) => {
-      let options;
-      if (kind === "icon") {
-        const correct = catName(lang, target.cat);
-        const others = [...new Set(pool.map((m) => catName(lang, m.cat)))].filter((c) => c !== correct);
-        options = shuffle([correct, ...shuffle(others).slice(0, 3)]);
-        return { target, options, answer: options.indexOf(correct) };
-      }
       const near = pool.filter((m) => m.id !== target.id).sort((a, b) => dist(a, target) - dist(b, target));
       const same = near.filter((m) => m.cat === target.cat).slice(0, 6);
       const rest = near.slice(0, 12).filter((m) => !same.includes(m));
       const picks = shuffle([...shuffle(same).slice(0, 2), ...shuffle(rest)]).slice(0, 3);
-      options = shuffle([target, ...picks]).map((m) => clean(m.name));
+      const options = shuffle([target, ...picks]).map((m) => clean(m.name));
       return { target, options, answer: options.indexOf(clean(target.name)) };
     });
   }
 
-  function ChoiceQuiz({ kind, map, lang, onExit, store, facts }) {
+  function ChoiceQuiz({ map, lang, onExit, store, facts }) {
     const T = TEXT[lang] ?? TEXT.en;
-    const frame = (t) => viewAround([t], kind === "icon" ? 34 : 130, 60);
-    const [rounds, setRounds] = useState(() => buildChoice(map, lang, kind));
+    const frame = (t) => viewAround([t], 130, 60);
+    const [rounds, setRounds] = useState(() => buildChoice(map));
     const [i, setI] = useState(0);
     const [view, setView] = useState(() => frame(rounds[0].target));
     const [chosen, setChosen] = useState(null);
@@ -613,7 +601,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       setView(frame(rounds[i + 1].target)); setI(i + 1); setChosen(null); t0.current = Date.now();
     }
     function again() {
-      const r = buildChoice(map, lang, kind);
+      const r = buildChoice(map);
       setRounds(r); setI(0); setView(frame(r[0].target)); setChosen(null); setScore({ ok: 0, xp: 0 }); setDone(false);
       t0.current = Date.now();
     }
@@ -624,15 +612,15 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const answered = chosen !== null;
     const overlay = (size) => h("g", { className: "pm-result" },
       h("circle", {
-        cx: q.target.x, cy: q.target.y, r: kind === "icon" ? 11 : size * 0.9,
+        cx: q.target.x, cy: q.target.y, r: size * 0.9,
         className: answered ? "pm-ring" : "pm-ring pm-ring-q",
       }),
-      !answered && kind === "place" && h("circle", { cx: q.target.x, cy: q.target.y, r: size * 0.8, className: "pm-pulse" }),
-      answered && kind === "place" && h(Label, { target: q.target, map: { hit: size * 0.9 }, view }));
+      !answered && h("circle", { cx: q.target.x, cy: q.target.y, r: size * 0.8, className: "pm-pulse" }),
+      answered && h(Label, { target: q.target, map: { hit: size * 0.9 }, view }));
     return h("div", { className: "screen quiz" + (answered ? " answered" : "") },
       h(Header, { title: map.label, i, n: rounds.length, onExit, T }),
-      h("p", { className: "tags" }, h("span", { className: "badge" }, kind === "icon" ? T.kindIcon : T.kindPlace), map.label),
-      h("h2", { className: "question" }, kind === "icon" ? T.whichIcon : T.which),
+      h("p", { className: "tags" }, h("span", { className: "badge" }, T.kindPlace), map.label),
+      h("h2", { className: "question" }, T.which),
       h(MapView, { map, view, setView, onTap: () => {}, labels: T, home: frame(q.target) }, overlay),
       h("div", { className: "options" }, q.options.map((o, k) => {
         const state = answered ? (k === q.answer ? "right" : k === chosen ? "wrong" : "dim") : "";
@@ -643,7 +631,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       answered && h("div", { className: "feedback " + (chosen === q.answer ? "ok" : "ko") },
         h("strong", null, chosen === q.answer ? T.correct : T.wrong),
         h("p", null, clean(q.target.name), typeOf(map, lang, q.target) && ` — ${typeOf(map, lang, q.target)}`),
-        kind === "place" && h(Fact, { facts, place: q.target, lang, T }),
+        h(Fact, { facts, place: q.target, lang, T }),
         h("div", { className: "fb-actions" },
           h("a", { className: "btn", href: wikiUrl(q.target), target: "_blank", rel: "noreferrer" }, T.wiki, " ↗"),
           h("button", { className: "btn primary", onClick: next }, i + 1 < rounds.length ? T.next : T.finish))));
@@ -1103,8 +1091,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const exit = () => setMode(null);
     const props = { mapKey: game, map, lang, store, saved, setSaved, facts, creatures, onExit: exit };
     if (mode === "find") return h(FindQuiz, { key: game + mode, ...props });
-    if (mode === "place") return h(ChoiceQuiz, { key: game + mode, ...props, kind: "place" });
-    if (mode === "icon") return h(ChoiceQuiz, { key: game + mode, ...props, kind: "icon" });
+    if (mode === "place") return h(ChoiceQuiz, { key: game + mode, ...props });
     if (mode === "discover") return h(Discover, { key: game + mode, ...props });
     if (mode === "explore") return h(Explorer, { key: game + mode, ...props });
 
@@ -1114,7 +1101,6 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       { id: "place", title: T.mPlace, sub: T.mPlaceSub },
       { id: "discover", title: T.mDiscover, sub: T.mDiscoverSub, tag: `${nFound}/${map.targets.length}` },
       { id: "explore", title: T.mExplore, sub: T.mExploreSub },
-      map.group !== "fo76" && { id: "icon", title: T.mIcon, sub: T.mIconSub },
     ].filter(Boolean);
     return h("div", { className: "screen" },
       h("div", { className: "chips scroll" }, Object.keys(GROUP_SHORT).map((grp) =>

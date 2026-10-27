@@ -151,7 +151,6 @@ for (const key of Object.keys(maps)) {
 for (const key of ["fo4", "fnv", "fo3", "fnvhh", "fo76"]) {
   await openMap(key);
   await choiceMode(key, "place");
-  if (key !== "fo76") await choiceMode(key, "icon");
   await exploreMode(key);
 }
 await openMap("fo4"); await discoverMode("fo4", true);
