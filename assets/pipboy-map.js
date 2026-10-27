@@ -12,7 +12,7 @@ const MIN_W = 80; // closest zoom, in map units
 const PICK_PX = 26; // tapping this close (screen px) to a marker selects it
 const ROUNDS = 10;
 const MISSION_QUESTIONS = 3;
-const MISSION_PASS = 2; // correct answers needed to discover a place
+const MISSION_PASS = 3; // correct answers needed to discover a place (all of them)
 const FRONTIER = 4; // how many undiscovered places are offered as next destinations
 const STORE_KEY = "wasteland-quiz-map-v1";
 const GROUP_SHORT = { fo3: "FO3", fnv: "FNV", fo4: "FO4", fo76: "76" }; // game chips, in display order
@@ -541,8 +541,10 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     const overlay = (size) => h("g", null,
       h(Fog, { points: [...found].map((id) => byId.get(id)), radius }),
       frontier.map((m) => h("g", { key: m.id, className: "pm-frontier" + (m.id === sel ? " on" : "") },
-        h("circle", { cx: m.x, cy: m.y, r: size * 0.85, className: "pm-fr-ring" }),
-        h("text", { x: m.x, y: m.y + size * 0.32, textAnchor: "middle", style: { fontSize: size * 0.9 }, className: "pm-fr-q" }, "?"))),
+        // the classic empty map marker: an icon-sized hollow square
+        h("rect", {
+          x: m.x - size * 0.5, y: m.y - size * 0.5, width: size, height: size, rx: size * 0.12, className: "pm-fr-box",
+        }))),
       note?.kind === "found" && h("g", { className: "pm-result" },
         h("circle", { cx: note.m.x, cy: note.m.y, r: size * 0.8, className: "pm-pulse" }),
         h(Label, { target: note.m, map: { hit: size * 0.9 }, view })));

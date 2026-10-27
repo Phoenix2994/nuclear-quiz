@@ -30,11 +30,10 @@
 .pm-chip-label{align-self:center;font-size:12px;white-space:nowrap}
 /* discover the map */
 .pm-fog-rect{fill:#010603;fill-opacity:.94;pointer-events:none}
-.pm-fr-ring{fill:rgba(255,179,71,.12);stroke:var(--warn);stroke-width:2;stroke-dasharray:5 4;vector-effect:non-scaling-stroke;animation:pm-blink 1.4s ease-in-out infinite}
-.pm-fr-q{fill:var(--warn);font-family:var(--font);font-weight:700;text-shadow:none;pointer-events:none}
-.pm-frontier.on .pm-fr-ring{fill:rgba(255,179,71,.3);stroke-dasharray:none;stroke-width:3;animation:none}
+.pm-fr-box{fill:rgba(255,179,71,.1);stroke:var(--warn);stroke-width:2.2;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 3px rgba(255,179,71,.8));animation:pm-blink 1.4s ease-in-out infinite}
+.pm-frontier.on .pm-fr-box{fill:rgba(255,179,71,.45);animation:none}
 .pm-dest{display:flex;flex-direction:column;gap:8px;border:1px solid var(--warn);border-radius:4px;padding:10px 12px}
 .pm-dest p{margin:2px 0 0}
 .pm-restart{border-color:var(--fg-dim);color:var(--fg-dim);padding:10px;font-size:13px}
 @keyframes pm-blink{0%,100%{opacity:1}50%{opacity:.45}}
-@media (prefers-reduced-motion:reduce){.pm-fr-ring{animation:none}}
+@media (prefers-reduced-motion:reduce){.pm-fr-box{animation:none}}
