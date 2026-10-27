@@ -143,6 +143,11 @@ deathclaw (125 damage) kills a level-1 player in one strike: levels come from th
 creatures of the right tier. Player stats come from the app (`stats.level`, `stats.special`: `ts(xp).level` and
 `ns(progress, key)` in the bundle). Win -> quiz (3 of 3 correct), lose or flee -> back to the map.
 
+Look of the aiming screen (as in the games' V.A.T.S.): the scene dims, the targeted body part glows green along the creature's own
+silhouette (a copy of the picture masked to the part's rectangle with feathered edges, `featherMask`: the transparent background
+keeps only the creature's pixels), and the parts are listed as labels on the two sides with leader lines (`layoutLabels`). Tap a
+label or the body part to aim and queue a shot. Entering V.A.T.S. plays a zoom-in and a scan line.
+
 Zone rectangles: the body template (`BODIES`) gives the layout, then `fit_zones` in `tools/build_creatures.py` shrinks every
 rectangle to the creature's own silhouette (opaque pixels of its picture) and mirrors four-legged beasts that face right; the result
 is stored per creature in `data/creatures.json` (`zones`). Where the automatic choice looks wrong, `tools/sources/creature-zones.json`
