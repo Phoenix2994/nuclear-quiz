@@ -75,6 +75,9 @@ Icons of places still to discover stay visible but in another colour (`Layers` /
 itself is never altered:
 - FO4: `img/maps/fo4-glyphs.webp`, a transparent layer holding only the baked glyph pixels in amber (`make_glyphs`, needs
   `opencv-python-headless`), drawn over the map and clipped to a square around each undiscovered marker.
+- FO3 and FNV: the wiki coordinates are a few pixels off the icons drawn on the real maps, so the build script snaps every marker
+  onto its icon plate (`snap_to_icons`: matched filter for a bright square of the plate size, `ICON_PLATE`). The recoloured box is
+  then exactly the icon.
 - FO3 (green -> amber) and FNV (amber -> cyan): the icons are filled plates, so a copy of the map with its hue rotated
   (`HUE_TINT` in the build script, `hue` in `data/maps.json`) is drawn clipped to a square around each marker.
 - DLC maps: the glyph overlay switches to a recoloured set (`icons_undisc`).
