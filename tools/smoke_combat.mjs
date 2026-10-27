@@ -44,8 +44,11 @@ async function quiz(page) { // answer the 3 mission questions correctly
   for (let i = 0; i < 3; i++) {
     await page.waitForSelector(".question");
     const text = (await page.textContent(".question")).trim();
-    const q = questions.find((x) => x.q.trim() === text);
     const opts = page.locator(".option");
+    // several questions share a text: pick the one whose options are the ones on screen
+    const shown = (await opts.allTextContents()).map((x) => x.replace(/^[A-D]/, "").trim());
+    const q = questions.find((x) => x.q.trim() === text && x.options.length === shown.length && x.options.every((o) => shown.includes(o.trim())))
+      ?? questions.find((x) => x.q.trim() === text);
     let idx = 0;
     if (q) for (let k = 0; k < (await opts.count()); k++) if ((await opts.nth(k).textContent()).replace(/^[A-D]/, "").trim() === q.options[q.answer].trim()) idx = k;
     await opts.nth(idx).click();

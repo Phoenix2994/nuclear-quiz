@@ -103,9 +103,12 @@ async function discoverMode(key, pass) {
   for (let i = 0; i < 3; i++) {
     await page.waitForSelector(".question");
     const text = (await page.textContent(".question")).trim();
-    const q = questions.find((x) => x.q.trim() === text);
-    const right = q && q.options[q.answer];
     const opts = page.locator(".option");
+    // several questions share a text: pick the one whose options are the ones on screen
+    const shown = (await opts.allTextContents()).map((x) => x.replace(/^[A-D]/, "").trim());
+    const q = questions.find((x) => x.q.trim() === text && x.options.length === shown.length && x.options.every((o) => shown.includes(o.trim())))
+      ?? questions.find((x) => x.q.trim() === text);
+    const right = q && q.options[q.answer];
     let idx = 0;
     // exact match on the option text (it is prefixed by the letter A-D)
     if (q) for (let k = 0; k < (await opts.count()); k++) if ((await opts.nth(k).textContent()).replace(/^[A-D]/, "").trim() === right.trim()) idx = k;

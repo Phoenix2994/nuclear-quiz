@@ -468,7 +468,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
   // wiki has one, a curiosity (data/place-facts.json). `info` = { d: descriptions, f: curiosities }, both keyed by wiki page.
   function Fact({ facts: info, place, lang, T }) {
     const d = info?.d?.[place.page], f = info?.f?.[place.page];
-    const desc = d && (d[lang] ?? d.en ?? d.it), text = f && (f[lang] ?? f.en);
+    const desc = d && (d[lang] ?? (lang === "it" ? d.en : null)), text = f && (f[lang] ?? f.en);
     if (!desc && !text) return null;
     return h("div", { className: "pm-info" },
       desc ? h("p", { className: "pm-desc" }, desc) : null,
