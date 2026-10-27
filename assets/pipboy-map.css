@@ -37,3 +37,8 @@
 .pm-restart{border-color:var(--fg-dim);color:var(--fg-dim);padding:10px;font-size:13px}
 @keyframes pm-blink{0%,100%{opacity:1}50%{opacity:.45}}
 @media (prefers-reduced-motion:reduce){.pm-fr-box{animation:none}}
+
+/* curiosity box */
+.pm-fact{border:1px dashed var(--fg-dim);border-radius:4px;padding:8px 10px;background:rgba(77,255,106,.05)}
+.pm-fact strong{display:block;font-size:12px;letter-spacing:.12em;color:var(--warn);text-shadow:none}
+.pm-fact p{margin:4px 0 0;font-size:14px;line-height:1.4}

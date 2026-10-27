@@ -15,6 +15,8 @@ dropping the bundle patch.
 | `img/maps/*.webp`, `img/maps/icons/*.png` | Map images and marker glyphs (generated) | Copy to static/public |
 | `tools/build_maps.py` | Regenerates the two rows above from the Fallout Wiki | Keep in repo (`python3 tools/build_maps.py`, needs `curl`, Pillow and `opencv-python-headless`) |
 | `tools/sources/*.jpg` | In-game Pip-Boy maps with icons for FO3 and FNV (input of the build script) | Keep with the tool |
+| `data/place-facts.json` | One curiosity (EN + IT) per place that has one: 105 places (generated) | Copy to static/public |
+| `tools/build_facts.py` | Builds it from the wiki's "Behind the scenes" bullets (filtered) and `tools/sources/place-facts-it.json` (hand-written Italian translations) | Keep in repo |
 | `tools/smoke_map.mjs` | Playwright smoke test of the MAP tab | Optional |
 
 ## Integration in the original sources (4 changes)

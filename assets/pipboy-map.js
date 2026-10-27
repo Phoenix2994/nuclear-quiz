@@ -39,7 +39,7 @@ const TEXT = {
     discovered: "SCOPERTO", failed: "Missione fallita", retry: "Riprova con la stessa destinazione o scegline un'altra.",
     complete: "MAPPA COMPLETATA", restart: "RICOMINCIA", restartConfirm: "Vuoi cancellare i luoghi scoperti su questa mappa?",
     needsQuestions: "Nessuna domanda disponibile per questo gioco.",
-    highlight: "Evidenzia", all: "Tutti", tapMarker: "Tocca un'icona per vedere il luogo.",
+    highlight: "Evidenzia", all: "Tutti", tapMarker: "Tocca un'icona per vedere il luogo.", fact: "CURIOSITÀ",
     credit: "Mappe e posizioni: Fallout Wiki (CC BY-SA 3.0). Immagini di proprietà dei rispettivi titolari.",
     credit76: " Mappa di Fallout 76: Mappalachia.",
   },
@@ -63,7 +63,7 @@ const TEXT = {
     discovered: "DISCOVERED", failed: "Mission failed", retry: "Try the same destination again or pick another.",
     complete: "MAP COMPLETE", restart: "START OVER", restartConfirm: "Clear the places discovered on this map?",
     needsQuestions: "No questions available for this game.",
-    highlight: "Highlight", all: "All", tapMarker: "Tap an icon to see the place.",
+    highlight: "Highlight", all: "All", tapMarker: "Tap an icon to see the place.", fact: "TRIVIA",
     credit: "Maps and positions: Fallout Wiki (CC BY-SA 3.0). Images belong to their respective owners.",
     credit76: " Fallout 76 map: Mappalachia.",
   },
@@ -310,6 +310,13 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     }, clean(target.name));
   }
 
+  // a curiosity about the place, when the wiki has one (data/place-facts.json, keyed by the place's wiki page)
+  function Fact({ facts, place, lang, T }) {
+    const f = facts?.[place.page];
+    const text = f && (f[lang] ?? f.en);
+    return text ? h("div", { className: "pm-fact" }, h("strong", null, T.fact), h("p", null, text)) : null;
+  }
+
   const pseudoQuestion = (map, id) => ({ id: "map:" + id, kind: "map", tipo: "luogo", livello: 2, giochi: [map.group] });
 
   // ---- mode 1: find the place, scored by distance
@@ -321,7 +328,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     return shuffle(map.targets).slice(0, ROUNDS).map((id) => byId.get(id));
   }
 
-  function FindQuiz({ mapKey, map, lang, onExit, store, saved, setSaved }) {
+  function FindQuiz({ mapKey, map, lang, onExit, store, saved, setSaved, facts }) {
     const T = TEXT[lang] ?? TEXT.en;
     const home = useMemo(() => bboxView(map.bbox), [map]);
     const [rounds, setRounds] = useState(() => pickRounds(map));
@@ -392,6 +399,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
         h("strong", null, pick.ok ? T.correct : T.wrong, " · +", pick.pts, " ", T.pts),
         h("p", null, clean(target.name), typeOf(map, lang, target) && ` — ${typeOf(map, lang, target)}`),
         !pick.ok && pick.other && h("p", { className: "muted" }, `${T.you}: ${clean(pick.other.name)}`),
+        h(Fact, { facts, place: target, lang, T }),
         h("div", { className: "fb-actions" },
           h("a", { className: "btn", href: wikiUrl(target), target: "_blank", rel: "noreferrer" }, T.wiki, " ↗"),
           h("button", { className: "btn primary", onClick: next }, i + 1 < rounds.length ? T.next : T.finish))));
@@ -422,7 +430,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     });
   }
 
-  function ChoiceQuiz({ kind, map, lang, onExit, store }) {
+  function ChoiceQuiz({ kind, map, lang, onExit, store, facts }) {
     const T = TEXT[lang] ?? TEXT.en;
     const frame = (t) => viewAround([t], kind === "icon" ? 34 : 130, 60);
     const [rounds, setRounds] = useState(() => buildChoice(map, lang, kind));
@@ -477,6 +485,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
       answered && h("div", { className: "feedback " + (chosen === q.answer ? "ok" : "ko") },
         h("strong", null, chosen === q.answer ? T.correct : T.wrong),
         h("p", null, clean(q.target.name), typeOf(map, lang, q.target) && ` — ${typeOf(map, lang, q.target)}`),
+        kind === "place" && h(Fact, { facts, place: q.target, lang, T }),
         h("div", { className: "fb-actions" },
           h("a", { className: "btn", href: wikiUrl(q.target), target: "_blank", rel: "noreferrer" }, T.wiki, " ↗"),
           h("button", { className: "btn primary", onClick: next }, i + 1 < rounds.length ? T.next : T.finish))));
@@ -500,7 +509,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     return [...fresh, ...shuffle(pool.filter((q) => seen.has(q.id)))].slice(0, MISSION_QUESTIONS);
   }
 
-  function Discover({ mapKey, map, lang, onExit, store, saved, setSaved }) {
+  function Discover({ mapKey, map, lang, onExit, store, saved, setSaved, facts }) {
     const T = TEXT[lang] ?? TEXT.en;
     const byId = useMemo(() => mapIndex(map), [map]);
     const radius = map.hit > 30 ? 130 : 105;
@@ -583,6 +592,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
       note?.kind === "found" && h("div", { className: "feedback ok" },
         h("strong", null, T.discovered, ": ", clean(note.m.name)),
         typeOf(map, lang, note.m) && h("p", null, typeOf(map, lang, note.m)),
+        h(Fact, { facts, place: note.m, lang, T }),
         h("div", { className: "fb-actions" },
           h("a", { className: "btn", href: wikiUrl(note.m), target: "_blank", rel: "noreferrer" }, T.wiki, " ↗"))),
       note?.kind === "failed" && h("div", { className: "feedback ko" },
@@ -596,7 +606,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
 
   // ---- mode 4: explorer
 
-  function Explorer({ map, lang, onExit }) {
+  function Explorer({ map, lang, onExit, facts }) {
     const T = TEXT[lang] ?? TEXT.en;
     const home = useMemo(() => bboxView(map.bbox), [map]);
     const [view, setView] = useState(home);
@@ -631,6 +641,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
       h(MapView, { map, view, setView, onTap, labels: T, home }, overlay),
       sel ? h("div", { className: "feedback ok" },
         h("strong", null, clean(sel.name)), typeOf(map, lang, sel) && h("p", null, typeOf(map, lang, sel)),
+        h(Fact, { facts, place: sel, lang, T }),
         h("div", { className: "fb-actions" },
           h("a", { className: "btn", href: wikiUrl(sel), target: "_blank", rel: "noreferrer" }, T.wiki, " ↗")))
         : h("p", { className: "muted center pm-hint" }, T.tapMarker));
@@ -638,24 +649,26 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
 
   // ---- tab
 
-  let mapsPromise = null;
-  const loadMaps = () => (mapsPromise ??= fetch("./data/maps.json").then((r) => {
-    if (!r.ok) throw new Error("maps");
-    return r.json();
-  }).catch((e) => { mapsPromise = null; throw e; }));
+  let dataPromise = null;
+  const json = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(url); return r.json(); });
+  const loadData = () => (dataPromise ??= Promise.all([
+    json("./data/maps.json"),
+    json("./data/place-facts.json").catch(() => ({})), // curiosities are optional
+  ]).catch((e) => { dataPromise = null; throw e; }));
 
   return function MapTab() {
     const store = useStore();
     const { lang } = useI18n();
     const T = TEXT[lang] ?? TEXT.en;
     const [maps, setMaps] = useState(null);
+    const [facts, setFacts] = useState({});
     const [failed, setFailed] = useState(false);
     const [game, setGame] = useState("fo4");
     const [mode, setMode] = useState(null);
     const [previewView, setPreviewView] = useState(null);
     const [saved, setSaved] = useState(loadSaved);
 
-    useEffect(() => { loadMaps().then(setMaps).catch(() => setFailed(true)); }, []);
+    useEffect(() => { loadData().then(([m, f]) => { setMaps(m); setFacts(f); }).catch(() => setFailed(true)); }, []);
     const map = maps && maps[game];
     useEffect(() => { if (map) setPreviewView(bboxView(map.bbox)); }, [game, maps]);
     const areas = map ? Object.keys(maps).filter((k) => maps[k].group === map.group) : [];
@@ -664,7 +677,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     if (!map || !previewView) return h("div", { className: "screen" }, h("p", { className: "muted" }, T.loading));
 
     const exit = () => setMode(null);
-    const props = { mapKey: game, map, lang, store, saved, setSaved, onExit: exit };
+    const props = { mapKey: game, map, lang, store, saved, setSaved, facts, onExit: exit };
     if (mode === "find") return h(FindQuiz, { key: game + mode, ...props });
     if (mode === "place") return h(ChoiceQuiz, { key: game + mode, ...props, kind: "place" });
     if (mode === "icon") return h(ChoiceQuiz, { key: game + mode, ...props, kind: "icon" });
