@@ -147,9 +147,9 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
   // ---- map layers
 
   // The map image, its icons and, in the discovery mode, only the icons of the places already discovered.
-  // `reveal` = { shown: Set of marker ids whose icon is visible, hidden: markers whose icon must be covered }.
+  // `reveal` = { shown: Set of marker ids whose icon is visible }.
   //  - maps with a "clean" twin (icons wiped out): draw the clean map, then restore the original in a square around shown markers
-  //  - FO76 (painted pictograms, cannot be wiped): cover the hidden markers with dark discs, like the fog
+  //  - FO76 (painted pictograms, cannot be wiped, and left visible on purpose): `reveal` is not used
   //  - the tinted DLC maps have no baked icons: only the glyphs of the shown markers are drawn
   const Layers = React.memo(function Layers({ map, size, reveal }) {
     const icons = map.icons;
@@ -161,12 +161,6 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
         h("defs", null, h("clipPath", { id: "pm-restore" },
           map.markers.filter((m) => reveal.shown.has(m.id)).map((m) => h("rect", { key: m.id, x: m.x - map.patch * 0.95, y: m.y - map.patch * 0.95, width: map.patch * 1.9, height: map.patch * 1.9 })))),
         h("image", { href: map.image, x: 0, y: 0, width: SIZE, height: SIZE, className: "pm-bg", clipPath: "url(#pm-restore)" })),
-      reveal && !map.clean && !glyphs && h("g", null,
-        h("defs", null, h("radialGradient", { id: "pm-plug-g" },
-          h("stop", { offset: "0", stopColor: "#010603", stopOpacity: 0.96 }),
-          h("stop", { offset: "0.65", stopColor: "#010603", stopOpacity: 0.96 }),
-          h("stop", { offset: "1", stopColor: "#010603", stopOpacity: 0 }))),
-        reveal.hidden.map((m) => h("circle", { key: m.id, cx: m.x, cy: m.y, r: map.patch * 1.25, fill: "url(#pm-plug-g)" }))),
       // the tinted DLC maps carry no icons: draw the category glyphs
       glyphs && h("g", { className: "pm-icons" }, map.markers.map((m) =>
         icons[m.c] && (!reveal || reveal.shown.has(m.id)) && h("image", {
@@ -514,14 +508,14 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     const selected = sel && frontier.find((m) => m.id === sel);
     // icons visible: discovered places, plus the minor markers near them; the undiscovered targets stay covered
     const reveal = useMemo(() => {
-      if (foundTargets >= total) return undefined;
+      if (foundTargets >= total || !map.clean && !Object.keys(map.icons).length) return undefined; // FO76: icons stay visible
       const reached = [...found].map((id) => byId.get(id)).filter(Boolean);
       const isTarget = new Set(map.targets);
       const shown = new Set(found);
       map.markers.forEach((m) => {
         if (!isTarget.has(m.id) && reached.some((r) => dist(r, m) <= radius * 0.8)) shown.add(m.id);
       });
-      return { shown, hidden: map.markers.filter((m) => isTarget.has(m.id) && !found.has(m.id)) };
+      return { shown };
     }, [map, byId, found, radius, foundTargets, total]);
 
     function persist(f) {

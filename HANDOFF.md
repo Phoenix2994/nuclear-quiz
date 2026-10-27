@@ -68,8 +68,7 @@ The icons of undiscovered places are hidden (`Layers` / `reveal` in the module):
 - FO3, FNV, FO4: the maps have the icons baked in, so the build script also writes `img/maps/<map>-clean.webp`
   (icons inpainted away: only the bright glyph pixels around each marker, `make_clean`). The mode draws the clean map and
   restores the original image in a square around the discovered places (`patch` in `data/maps.json`) and the minor markers near them.
-- FO76: painted pictograms cannot be inpainted (tried: polygon smears), so the undiscovered targets are covered with
-  dark soft discs like the fog.
+- FO76: its icons are painted pictograms that cannot be inpainted, and the owner chose to leave them visible: only the fog applies there.
 - DLC maps: no baked icons, only the glyphs of the revealed markers are drawn.
 Some baked icons without a wiki marker (or a bit off) can stay visible on the clean maps.
 
