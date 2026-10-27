@@ -38,7 +38,9 @@ BAKED = {
 ICON_RADIUS = {"fo3": 16, "fnv": 15, "fo4": 15, "fo76": 24}
 GLYPH_CONTRAST = {"fo4": 40}  # FO4 glyphs have no plate: a transparent layer of the glyph pixels, recoloured
 # FO3 / FNV icons are filled plates: a square copy of the map around the icon with its colour rotated (degrees, half size)
-HUE_TINT = {"fo3": (-100, 14), "fnv": (155, 14)}  # green -> amber, amber -> cyan
+HUE_TINT = {"fo3": -100, "fnv": 155}  # degrees: green -> amber, amber -> cyan
+# size in pixels of the icon plates of the real maps (FO3 is upscaled x2), and how far from the wiki marker to look for its icon
+ICON_PLATE = {"fo3": (20, 26), "fnv": (12, 16)}
 UNDISCOVERED = {"fo3": (255, 176, 64), "fnv": (80, 215, 255), "fo4": (255, 176, 64)}  # colour of the icons to discover
 GROUP_COLOR = {"fo3": (110, 255, 130), "fnv": (255, 186, 96)}  # glyph / tint colour of the maps without baked icons
 # Where the "discover the map" mode starts (marker name): the game's starting vault or town, or the DLC entry point
@@ -124,6 +126,39 @@ def fetch_file(cache, title):
     if not os.path.exists(path):
         subprocess.run(["curl", "-sS", "-L", "-m", "300", "-o", path, file_url(title)], check=True)
     return path
+
+
+def snap_to_icons(im, markers, size, radius):
+    """Move each marker onto the icon plate drawn on the map: a matched filter (bright square of the plate's size on a darker
+    surround, on the white top-hat of the image) searched within `radius` pixels, nearest preferred. Two markers never share
+    an icon: the closer one keeps it, the other stays where the wiki puts it."""
+    import cv2
+    import numpy as np
+    w, h = im.size
+    gray = cv2.cvtColor(np.asarray(im.convert("RGB")), cv2.COLOR_RGB2GRAY).astype(np.float32)
+    k = int(size * 2.2) | 1
+    th = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, cv2.getStructuringElement(cv2.MORPH_RECT, (k, k)))
+    inner = cv2.boxFilter(th, -1, (size, size), normalize=False)
+    outer = cv2.boxFilter(th, -1, (size + 6, size + 6), normalize=False)
+    score = inner / (size * size) - 0.9 * (outer - inner) / ((size + 6) ** 2 - size * size)
+    cands = []
+    for i, m in enumerate(markers):
+        px, py = m["x"] / 1000 * w, m["y"] / 1000 * h
+        x0, x1, y0, y1 = int(max(0, px - radius)), int(min(w, px + radius + 1)), int(max(0, py - radius)), int(min(h, py + radius + 1))
+        if x1 <= x0 or y1 <= y0:
+            continue
+        yy, xx = np.mgrid[y0:y1, x0:x1]
+        dist = np.hypot(xx - px, yy - py)
+        win = score[y0:y1, x0:x1] - 0.15 * dist
+        j = np.unravel_index(win.argmax(), win.shape)
+        cands.append((float(dist[j]), i, x0 + j[1], y0 + j[0]))
+    taken = set()
+    for d, i, x, y in sorted(cands):
+        cell = (x // size, y // size)
+        if cell in taken:
+            continue
+        taken.add(cell)
+        markers[i]["x"], markers[i]["y"] = round(x / w * 1000, 1), round(y / h * 1000, 1)
 
 
 def make_glyphs(im, markers, radius, contrast, color):
@@ -277,6 +312,8 @@ def main():
                 "id": f"{g}-{i}", "name": t, "page": page_t, "cat": cats[x["categoryId"]]["name"], "cid": x["categoryId"],
                 "x": round(mx, 1), "y": round(my, 1),
             })
+        if g in ICON_PLATE:  # wiki coordinates are a few pixels off the icons drawn on the real map: snap them to the icons
+            snap_to_icons(im, markers, *ICON_PLATE[g])
         per_cat = {}
         for k in markers:
             per_cat[k["cat"]] = per_cat.get(k["cat"], 0) + 1
@@ -313,7 +350,7 @@ def main():
         for old in ("fo3", "fnv"):  # leftovers of a previous method
             if g == old and os.path.exists(os.path.join(ROOT, f"img/maps/{g}-glyphs.webp")):
                 os.remove(os.path.join(ROOT, f"img/maps/{g}-glyphs.webp"))
-        hue = HUE_TINT.get(g)
+        hue = [HUE_TINT[g], round(ICON_PLATE[g][0] / im.width * 1000 / 2 + 1, 1)] if g in HUE_TINT else None  # rotation, half box
         out[g] = {
             "start": start, "glyphs": glyphs, "hue": hue, "patch": ICON_RADIUS.get(g, 0) + 2, "label": label, "group": group, "short": short, "image": dst, "hit": hit, "bbox": [round(v) for v in bbox], "icons": icons, "icons_undisc": icons_undisc,
             "cats": {c["id"]: c["name"] for c in m["categories"]},

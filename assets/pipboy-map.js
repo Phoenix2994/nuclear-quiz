@@ -663,14 +663,22 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     return (near.length ? near : rest.slice(0, 1)).slice(0, FRONTIER).map((o) => o.m);
   }
 
-  // unseen questions first, so every mission teaches something new
-  function pickMissionQuestions(store, map) {
+  // Difficulty grows with the discovered share of the map: the first missions only ask easy questions (level 1), the middle ones
+  // easy and medium, the last ones everything. Within the allowed levels the questions you have not seen come first.
+  const missionLevel = (share) => (share < 0.15 ? 1 : share < 0.5 ? 2 : 3);
+  function pickMissionQuestions(store, map, share) {
     const seen = new Set(store.progress.seen);
-    const pool = store.questions.filter((q) => q.giochi.includes(map.group) && q.kind !== "game");
-    const fresh = shuffle(pool.filter((q) => !seen.has(q.id)));
-    return [...fresh, ...shuffle(pool.filter((q) => seen.has(q.id)))].slice(0, MISSION_QUESTIONS);
+    const base = store.questions.filter((q) => q.giochi.includes(map.group) && q.kind !== "game");
+    const maxLevel = missionLevel(share);
+    const pick = (list) => {
+      const fresh = shuffle(list.filter((q) => !seen.has(q.id)));
+      return [...fresh, ...shuffle(list.filter((q) => seen.has(q.id)))];
+    };
+    const easy = pick(base.filter((q) => q.livello <= maxLevel));
+    // too few questions at this level (a small game): top up with the next levels, never with harder ones first
+    const rest = pick(base.filter((q) => q.livello > maxLevel)).sort((x, y) => x.livello - y.livello);
+    return [...easy, ...rest].slice(0, MISSION_QUESTIONS);
   }
-
 
   // ---- the fight: creature appears, fight or flee, V.A.T.S.-style aiming, then the result
 
@@ -936,7 +944,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       if (hit) { setSel(hit.m.id); setNote(null); }
     }
     function travel() {
-      const qs = pickMissionQuestions(store, map);
+      const qs = pickMissionQuestions(store, map, foundTargets / total);
       if (!qs.length) { setNote({ kind: "noq" }); return; }
       const pool = creatures?.[map.group]; // pickCreature leaves out the creatures whose weak points are not known yet
       if (!pool?.some((c) => !c.pending)) { setMission({ stage: "quiz", target: selected, qs }); return; } // no creature data: quiz only

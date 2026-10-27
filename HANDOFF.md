@@ -67,7 +67,7 @@ Perception (S.P.E.C.I.A.L.) point work like any other quiz. `store.completeSessi
 |---|---|
 | Find the place | 10 rounds: tap the named place. Points by distance (100 within half the hit radius, then linear to 0 at 7.5x); counts as correct, for XP, within the hit radius. Best score per map is kept. |
 | Which place is this? | A place is highlighted, pick its name among 4 (distractors: same category / nearby). |
-| Discover the map | Fog of war. Starts at the game's first vault (`start` in `data/maps.json`, table `START` in the build script). The 4 nearest undiscovered places appear as empty green-circle markers (the wiki's `Icon FOx Map Circle`, redrawn as SVG); pick one and "travel": a 3-question mission built from the app's own questions for that game (unseen first). All 3 answers must be right (`MISSION_PASS`) to discover the place and lift the fog around it; otherwise try again. Progress is saved per map. |
+| Discover the map | Fog of war. Starts at the game's first vault (`start` in `data/maps.json`, table `START` in the build script). The 4 nearest undiscovered places appear as empty green-circle markers (the wiki's `Icon FOx Map Circle`, redrawn as SVG); pick one and "travel": a 3-question mission built from the app's own questions for that game (unseen first). The questions get harder with the discovered share of the map (`missionLevel`: under 15% only level 1, under 50% levels 1-2, then 1-3; the `livello` of each question in the app data), unseen ones first. All 3 answers must be right (`MISSION_PASS`) to discover the place and lift the fog around it; otherwise try again. Progress is saved per map. |
 | Explorer | Browse freely; tap an icon for name, type and wiki link; highlight a category. |
 | Which icon is this? | A zoomed icon is circled, pick the kind of place (only generic categories, never a place's own name). Not offered for FO76 (its icons are pictures, not glyphs). |
 
@@ -75,6 +75,9 @@ Icons of places still to discover stay visible but in another colour (`Layers` /
 itself is never altered:
 - FO4: `img/maps/fo4-glyphs.webp`, a transparent layer holding only the baked glyph pixels in amber (`make_glyphs`, needs
   `opencv-python-headless`), drawn over the map and clipped to a square around each undiscovered marker.
+- FO3 and FNV: the wiki coordinates are a few pixels off the icons drawn on the real maps, so the build script snaps every marker
+  onto its icon plate (`snap_to_icons`: matched filter for a bright square of the plate size, `ICON_PLATE`). The recoloured box is
+  then exactly the icon.
 - FO3 (green -> amber) and FNV (amber -> cyan): the icons are filled plates, so a copy of the map with its hue rotated
   (`HUE_TINT` in the build script, `hue` in `data/maps.json`) is drawn clipped to a square around each marker.
 - DLC maps: the glyph overlay switches to a recoloured set (`icons_undisc`).
