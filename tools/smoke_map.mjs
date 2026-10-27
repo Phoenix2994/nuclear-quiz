@@ -79,7 +79,7 @@ async function winFight() {
   await page.waitForSelector(".vats");
   await page.click('[data-act="fight"]');
   for (let round = 0; round < 12; round++) {
-    while ((await page.locator(".vats-pips i.free").count()) > 0) await page.locator(".vats-zone").nth(1).click(); // the body zone
+    for (let k = 0; k < 12 && (await page.locator(".vats-zone:not([disabled])").count()) > 0; k++) await page.locator(".vats-zone").nth(1).click(); // the body zone
     await page.click('[data-act="exec"]');
     await page.waitForFunction(() => document.querySelector(".feedback.ok") || document.querySelector('.vats-zone:not([disabled])'), null, { timeout: 20000 });
     if (await page.locator(".feedback.ok").count()) break;
@@ -152,6 +152,13 @@ async function campCheck() {
   const [stim2, caps2] = await hud();
   console.log("fo4 settlement: stimpaks", stim, "->", stim2, "caps", caps, "->", caps2);
   check(stim2 === stim + 1 && caps2 === caps - 25, "buying a stimpak");
+  // the shop: a pack of 10mm rounds for 10 caps
+  await page.click('[data-act="shop"]');
+  await page.click('[data-buy="10mm"]');
+  const caps3 = +(await page.getAttribute("[data-caps]", "data-caps"));
+  const ammo = (await page.textContent(".pm-weapon")).trim();
+  console.log("fo4 shop: caps", caps2, "->", caps3, "|", ammo);
+  check(caps3 === caps2 - 10 && /10mm/.test(ammo), "buying ammo");
   await page.click(".topbar .link");
 }
 

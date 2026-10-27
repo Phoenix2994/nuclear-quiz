@@ -53,6 +53,10 @@ const TEXT = {
     aGotCaps: "tappi", aGotStim: "Hai trovato uno stimpak", aLost: "tappi persi", aBack: "Ti risvegli a",
     aRested: "Hai riposato: PS al massimo.", aBought: "Stimpak acquistato.", aNoEncounter: "Il viaggio è tranquillo: nessuna creatura.",
     cStim: "STIMPAK", cHealed: "Stimpak: +",
+    cChoose: "Scegli l'arma", cAmmo: "Munizioni", cMelee: "Mischia: niente munizioni", cBash: "CALCIO",
+    cNoAmmo: "Munizioni finite: colpisci con il calcio dell'arma (2 PA)",
+    shop: "NEGOZIO", shopClose: "CHIUDI NEGOZIO", shopWeapons: "Armi", shopAmmo: "Munizioni", owned: "posseduta", buy: "COMPRA",
+    aWeapon: "Arma", aLoot: "Hai trovato", aBoughtW: "Arma acquistata:", aBoughtA: "Munizioni acquistate:",
     credit: "Mappe e posizioni: Fallout Wiki (CC BY-SA 3.0). Immagini di proprietà dei rispettivi titolari.",
     credit76: " Mappa di Fallout 76: Mappalachia.",
   },
@@ -90,6 +94,10 @@ const TEXT = {
     aGotCaps: "caps", aGotStim: "You found a stimpak", aLost: "caps lost", aBack: "You wake up at",
     aRested: "You rested: HP full.", aBought: "Stimpak bought.", aNoEncounter: "A quiet trip: no creature.",
     cStim: "STIMPAK", cHealed: "Stimpak: +",
+    cChoose: "Choose your weapon", cAmmo: "Ammo", cMelee: "Melee: no ammo", cBash: "BASH",
+    cNoAmmo: "Out of ammo: you bash with the gun (2 AP)",
+    shop: "SHOP", shopClose: "CLOSE SHOP", shopWeapons: "Weapons", shopAmmo: "Ammo", owned: "owned", buy: "BUY",
+    aWeapon: "Weapon", aLoot: "You found", aBoughtW: "Weapon bought:", aBoughtA: "Ammo bought:",
     credit: "Maps and positions: Fallout Wiki (CC BY-SA 3.0). Images belong to their respective owners.",
     credit76: " Fallout 76 map: Mappalachia.",
   },
@@ -167,7 +175,7 @@ function saveSaved(s) {
 // (data/creatures.json, tools/build_creatures.py); a missing figure falls back to health 8 + 10 L and damage 3 + 2 L.
 // A weak creature can die from one good shot (a head shot, or a critical); stronger ones need several shots and hit back.
 const SPEED_VALUE = { slow: 3, normal: 5, fast: 8 };
-const AP_COST = 2; // action points per shot
+const AP_COST = 2; // action points of a shot without a weapon, of a gun bash and of a stimpak
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 // zones: box = [x, y, w, h] as fractions of the creature picture; acc = base hit chance; mult = damage multiplier;
@@ -193,9 +201,42 @@ export const BODIES = {
 // a wide "humanoid" picture (a crouching deathclaw) is laid out like a four-legged beast
 export const bodyOf = (c) => (c.body in BODIES ? c.body : "humanoid"); // data/creatures.json already holds the template that fits the picture
 
+// Weapons of the adventure (one set for every game). ap: action points per shot; mult: damage multiplier on the player's
+// base damage; acc: hit chance bonus; melee: no ammo, Strength counts twice; ammo: ammo type; per: rounds per shot
+// (a minigun burst); pierce: share of the creature's damage resistance ignored (energy weapons); price in caps.
+// Pictures: img/weapons/<key>.webp (tools/build_weapons.py).
+export const WEAPONS = {
+  knife: { it: "Coltello da combattimento", en: "Combat knife", ap: 2, mult: 0.8, acc: 10, melee: true, price: 0 },
+  pistol: { it: "Pistola 10mm", en: "10mm pistol", ap: 2, mult: 1, acc: 0, ammo: "10mm", price: 0 },
+  shotgun: { it: "Fucile a pompa", en: "Combat shotgun", ap: 3, mult: 1.8, acc: -10, ammo: "shell", price: 120 },
+  rifle: { it: "Fucile da caccia", en: "Hunting rifle", ap: 4, mult: 2.2, acc: 10, ammo: "308", price: 180 },
+  sledge: { it: "Super martello", en: "Super sledge", ap: 4, mult: 2.5, acc: -5, melee: true, price: 250 },
+  laser: { it: "Fucile laser", en: "Laser rifle", ap: 3, mult: 1.5, acc: 5, ammo: "cell", pierce: 0.5, price: 300 },
+  minigun: { it: "Minigun", en: "Minigun", ap: 4, mult: 2.4, acc: -15, ammo: "5mm", per: 5, price: 450 },
+  plasma: { it: "Fucile al plasma", en: "Plasma rifle", ap: 3, mult: 2.0, acc: 0, ammo: "mf", pierce: 0.25, price: 500 },
+};
+// ammo sold in packs at the settlements
+export const AMMO = {
+  "10mm": { it: "Munizioni 10mm", en: "10mm rounds", pack: 10, price: 10 },
+  shell: { it: "Cartucce calibro 12", en: "Shotgun shells", pack: 6, price: 15 },
+  "308": { it: "Munizioni .308", en: ".308 rounds", pack: 5, price: 20 },
+  cell: { it: "Celle energetiche", en: "Energy cells", pack: 10, price: 25 },
+  "5mm": { it: "Munizioni 5mm", en: "5mm rounds", pack: 40, price: 20 },
+  mf: { it: "Celle a microfusione", en: "Microfusion cells", pack: 8, price: 30 },
+};
+// the player in a fight with a weapon: ammo = rounds of its type (null for melee). Out of ammo a gun is used to bash.
+export function armed(player, key = "knife", ammo = null) {
+  const w = WEAPONS[key] ?? WEAPONS.knife;
+  return { ...player, weapon: WEAPONS[key] ? key : "knife", base: player.dmg, cost: w.ap, wAcc: w.acc, pierce: w.pierce ?? 0, per: w.per ?? 1,
+    dmg: Math.round(player.dmg * w.mult) + (w.melee ? 2 * (player.str ?? 1) : 0), ammo: w.ammo ? ammo ?? 0 : null };
+}
+// a gun bash: 2 AP, half the base damage plus Strength, easier to land
+const BASH = { acc: 10, mult: 0.5 };
+const bashDmg = (p) => Math.round((p.base ?? p.dmg) * BASH.mult) + (p.str ?? 1);
+
 export function playerFrom(progress, stats) {
   const lvl = stats?.level(progress) ?? 1, sp = (k) => stats?.special(progress, k) ?? 1;
-  return { level: lvl, hpMax: 40 + 8 * sp("E") + 5 * lvl, apMax: 6 + 2 * sp("A"), cost: AP_COST, dmg: 6 + 2 * lvl + sp("S"), per: sp("P"), agi: sp("A"), lck: sp("L") };
+  return { level: lvl, hpMax: 40 + 8 * sp("E") + 5 * lvl, apMax: 6 + 2 * sp("A"), cost: AP_COST, dmg: 6 + 2 * lvl + sp("S"), str: sp("S"), per: sp("P"), agi: sp("A"), lck: sp("L") };
 }
 
 // the V.A.T.S. zones of a creature: the template of its body type, plus the antennae when the wiki says crippling them
@@ -231,21 +272,32 @@ const effects = (c) => ({
   slow: c.parts.filter((p) => p.crippled && p.effect === "slow").length,
 });
 export const creatureSpeed = (c) => Math.max(1, SPEED_VALUE[c.speed] - 2 * effects(c).slow);
-export const hitChance = (f, part) => {
+export const hitChance = (f, part, bash = false) => {
   const evasion = Math.min(35, Math.round(1.5 * f.c.level)) + (f.c.speed === "fast" ? 6 : 0) - (effects(f.c).slow ? 6 : 0);
-  return clamp(Math.round(part.acc + 3 * f.p.per - evasion), 5, 95);
+  return clamp(Math.round(part.acc + 3 * f.p.per + (bash ? BASH.acc : f.p.wAcc ?? 0) - evasion), 5, 95);
 };
+// share of the damage that gets through the creature's armour (energy weapons ignore part of it)
+export const through = (f, bash = false) => 1 - f.c.absorb * (bash ? 1 : 1 - (f.p.pierce ?? 0));
+// damage of a shot before the random spread (shown as the predicted damage)
+const rawDamage = (f, part, crit, bash) => (bash ? bashDmg(f.p) : f.p.dmg) * part.mult * (crit ? 2 : through(f, bash));
+export const shotDamage = (f, part, crit, bash = false) => Math.round(rawDamage(f, part, crit, bash));
+// action points of a queued action: a shot with the weapon, a gun bash, a stimpak
+export const costOf = (f, q) => (q.stim || q.bash ? AP_COST : f.p.cost);
+// a shot with a gun whose ammo (minus the rounds already queued) is not enough becomes a bash
+export const needsBash = (p, roundsQueued = 0) => p.ammo !== null && p.ammo !== undefined && p.ammo - roundsQueued < (p.per ?? 1);
 export const critGain = (p) => 14 + 3 * p.lck; // meter points per shot, 100 = full
 export const maxShots = (f) => Math.floor(f.p.apMax / f.p.cost);
 
 // A shot always consumes two random numbers (hit roll, damage roll) so that scripted tests are predictable.
 export function playerShot(f, partKey, crit, rnd) {
   const part = f.c.parts.find((x) => x.key === partKey);
-  const chance = hitChance(f, part), hitRoll = rnd() * 100, dmgRoll = rnd();
+  const bash = needsBash(f.p);
+  const chance = hitChance(f, part, bash), hitRoll = rnd() * 100, dmgRoll = rnd();
   const hit = crit || hitRoll < chance;
   // armour absorbs a share of the damage, except from a critical hit (as in Fallout 4)
-  const dmg = hit ? Math.max(1, Math.round(f.p.dmg * part.mult * (crit ? 2 : 1 - f.c.absorb) * (0.9 + dmgRoll * 0.2))) : 0;
-  f.p.ap -= f.p.cost;
+  const dmg = hit ? Math.max(1, Math.round(rawDamage(f, part, crit, bash) * (0.9 + dmgRoll * 0.2))) : 0;
+  f.p.ap -= bash ? AP_COST : f.p.cost;
+  if (!bash && f.p.ammo != null) f.p.ammo -= f.p.per ?? 1;
   f.p.crit = crit ? 0 : Math.min(100, f.p.crit + critGain(f.p));
   f.c.hp = Math.max(0, f.c.hp - dmg);
   let crippled = false;
@@ -253,7 +305,7 @@ export function playerShot(f, partKey, crit, rnd) {
     part.hp = Math.max(0, part.hp - dmg);
     if (part.hp === 0 && !part.crippled) { part.crippled = true; crippled = true; }
   }
-  return { part: partKey, hit, dmg, crit, crippled, killed: f.c.hp === 0, chance };
+  return { part: partKey, hit, dmg, crit, crippled, killed: f.c.hp === 0, chance, bash };
 }
 
 // the creature acts after your queue: 2 strikes if it is fast, 1 otherwise
@@ -279,7 +331,8 @@ export function fleeInfo(f) {
 export const tryFlee = (f, rnd) => rnd() * 100 < fleeInfo(f).chance;
 
 // ---- adventure (discovery mode): health, stimpaks, caps and position carried from one mission to the next, saved per map.
-// Pure functions on a plain state { hp, stim, caps, at, safe }: at = place you are in, safe = last settlement visited.
+// Pure functions on a plain state { hp, stim, caps, at, safe, weapons, equip, ammo }: at = place you are in, safe = last
+// settlement visited, weapons = keys of WEAPONS owned, equip = the one in use, ammo = { type: rounds }.
 export const ADV = {
   stim: 2, maxStim: 10, caps: 20, capsPerPlace: 5, // start; capsPerPlace: for places discovered before the adventure existed
   encounter: 0.75, // chance that a creature blocks the way on a trip
@@ -287,13 +340,27 @@ export const ADV = {
   foundCaps: 10, stimFind: 0.25, // reward of a discovered place, chance of finding a stimpak there
   defeatLoss: 0.25, // share of the caps lost when defeated (you wake up at the last settlement with half health)
   rest: 10, stimPrice: 25, // settlement prices; resting in the starting vault is free
+  weapons: ["knife", "pistol"], ammo: { "10mm": 20 }, // starting kit
+  lootWin: 0.35, lootFound: 0.15, // ammo is fairly rare: chance of a pack after a won fight / in a discovered place
 };
 export const winCaps = (level, r) => Math.round((5 + 3 * level) * (0.8 + 0.4 * r));
-export const newAdventure = (hpMax, start, discovered = 0) =>
-  ({ hp: hpMax, stim: ADV.stim, caps: ADV.caps + ADV.capsPerPlace * discovered, at: start, safe: start });
-// the result of a fight: hp and stim are what the player has left at the end of it
-export function advAfterFight(a, { result, hp, stim, level }, hpMax, rnd) {
-  if (result === "win") { const gain = winCaps(level, rnd()); return { a: { ...a, hp, stim, caps: a.caps + gain }, gain }; }
+export const newAdventure = (hpMax, start, discovered = 0) => withKit({ hp: hpMax, stim: ADV.stim, caps: ADV.caps + ADV.capsPerPlace * discovered, at: start, safe: start });
+// adventures saved before the weapons existed get the starting kit
+export const withKit = (a) => (a.weapons ? a : { ...a, weapons: [...ADV.weapons], equip: "pistol", ammo: { ...ADV.ammo } });
+// a pack of ammo for one of the guns you own (none if you only have melee weapons)
+function lootAmmo(a, chance, rnd) {
+  const types = [...new Set(a.weapons.map((k) => WEAPONS[k]?.ammo).filter(Boolean))];
+  if (!types.length || rnd() >= chance) return { a };
+  const type = types[Math.floor(rnd() * types.length)], n = AMMO[type].pack;
+  return { a: { ...a, ammo: { ...a.ammo, [type]: (a.ammo[type] ?? 0) + n } }, loot: { type, n } };
+}
+// the result of a fight: hp, stim and ammo ({ type: rounds left }) are what the player has left at the end of it
+export function advAfterFight(a, { result, hp, stim, ammo = {}, level }, hpMax, rnd) {
+  a = { ...a, ammo: { ...a.ammo, ...ammo } };
+  if (result === "win") {
+    const gain = winCaps(level, rnd()), r = lootAmmo(a, ADV.lootWin, rnd);
+    return { a: { ...r.a, hp, stim, caps: a.caps + gain }, gain, loot: r.loot };
+  }
   if (result === "lose") {
     const loss = Math.floor(a.caps * ADV.defeatLoss);
     return { a: { ...a, hp: Math.ceil(hpMax / 2), stim, caps: a.caps - loss, at: a.safe }, loss };
@@ -302,18 +369,26 @@ export function advAfterFight(a, { result, hp, stim, level }, hpMax, rnd) {
 }
 export function advAfterDiscover(a, placeId, isSafe, rnd) {
   const stim = a.stim < ADV.maxStim && rnd() < ADV.stimFind ? 1 : 0;
-  return { a: { ...a, caps: a.caps + ADV.foundCaps, stim: a.stim + stim, at: placeId, safe: isSafe ? placeId : a.safe }, caps: ADV.foundCaps, stim };
+  const r = lootAmmo(a, ADV.lootFound, rnd);
+  return { a: { ...r.a, caps: a.caps + ADV.foundCaps, stim: a.stim + stim, at: placeId, safe: isSafe ? placeId : a.safe },
+    caps: ADV.foundCaps, stim, loot: r.loot };
 }
+export const canBuyWeapon = (a, key) => !a.weapons.includes(key) && a.caps >= WEAPONS[key].price;
+export const buyWeapon = (a, key) => (canBuyWeapon(a, key) ? { ...a, weapons: [...a.weapons, key], caps: a.caps - WEAPONS[key].price } : a);
+export const canBuyAmmo = (a, type) => a.caps >= AMMO[type].price;
+export const buyAmmo = (a, type) => (canBuyAmmo(a, type)
+  ? { ...a, ammo: { ...a.ammo, [type]: (a.ammo[type] ?? 0) + AMMO[type].pack }, caps: a.caps - AMMO[type].price } : a);
+export const equip = (a, key) => (a.weapons.includes(key) ? { ...a, equip: key } : a);
 export const restCost = (a, start) => (a.at === start ? 0 : ADV.rest);
 export const canRest = (a, hpMax, start) => a.hp < hpMax && a.caps >= restCost(a, start);
 export const rest = (a, hpMax, start) => (canRest(a, hpMax, start) ? { ...a, hp: hpMax, caps: a.caps - restCost(a, start) } : a);
 export const canBuy = (a) => a.caps >= ADV.stimPrice && a.stim < ADV.maxStim;
 export const buyStim = (a) => (canBuy(a) ? { ...a, stim: a.stim + 1, caps: a.caps - ADV.stimPrice } : a);
 export const fastTravel = (a, placeId) => ({ ...a, at: placeId, safe: placeId });
-// a stimpak in a fight: heals at once and costs the action points of one shot
+// a stimpak in a fight: heals at once and costs 2 action points
 export function useStimpak(f) {
   const heal = Math.min(f.p.hpMax - f.p.hp, Math.round(ADV.heal * f.p.hpMax));
-  f.p.hp += heal; f.p.stim -= 1; f.p.ap -= f.p.cost;
+  f.p.hp += heal; f.p.stim -= 1; f.p.ap -= AP_COST;
   return { heal };
 }
 // settlements: where you can rest, buy stimpaks and fast travel to (plus the starting vault)
@@ -756,16 +831,19 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     return items;
   }
 
-  // hp / stim: what the player brings from the map; onResult(result, { hp, stim }) gives back what is left
-  function Encounter({ creature, lang, store, onResult, hp, stim }) {
+  // hp / stim / weapons / equip / ammo: what the player brings from the map; the weapon is chosen before the fight.
+  // onResult(result, { hp, stim, ammo, equip }) gives back what is left.
+  function Encounter({ creature, lang, store, onResult, hp, stim, weapons = ["knife"], equip: equipped, ammo = {} }) {
     const T = TEXT[lang] ?? TEXT.en;
     const player = useMemo(() => playerOf(store), []);
-    const [f, setF] = useState(() => newFight(creature, player, testHook().invincible ? undefined : hp, stim));
-    const done = (result) => onResult(result, { hp: f.p.hp, stim: f.p.stim });
+    const start = (key) => newFight(creature, armed(player, key, ammo[WEAPONS[key]?.ammo]), testHook().invincible ? undefined : hp, stim);
+    const [f, setF] = useState(() => start(weapons.includes(equipped) ? equipped : weapons[0]));
+    const wpn = WEAPONS[f.p.weapon];
+    const done = (result) => onResult(result, { hp: f.p.hp, stim: f.p.stim, equip: f.p.weapon, ammo: wpn.ammo ? { [wpn.ammo]: f.p.ammo } : {} });
     const level = creature.level;
     const [phase, setPhase] = useState("intro"); // intro | aim | exec | win | lose | fled
     const [queue, setQueue] = useState([]); // [{ part, crit }]
-    const [armed, setArmed] = useState(false);
+    const [critArmed, setCritArmed] = useState(false);
     const [focus, setFocus] = useState(null);
     const [flash, setFlash] = useState(null);
     const [hurt, setHurt] = useState(null);
@@ -775,25 +853,27 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const say = (t) => setLines((l) => [...l.slice(-3), t]);
 
     const critReady = f.p.crit >= 100 && !queue.some((q) => q.crit);
-    const apLeft = f.p.ap - queue.length * f.p.cost;
+    const apLeft = f.p.ap - queue.reduce((sum, q) => sum + costOf(f, q), 0);
+    const roundsQueued = queue.reduce((sum, q) => sum + (q.stim || q.bash ? 0 : f.p.per), 0);
+    const bashNext = needsBash(f.p, roundsQueued); // out of ammo: the next shot is a gun bash
+    const shotCost = bashNext ? AP_COST : f.p.cost;
     const info = fleeInfo(f);
     const speedNow = creatureSpeed(f.c);
     const stimQueued = queue.filter((q) => q.stim).length;
-    const canStim = phase === "aim" && apLeft >= f.p.cost && stimQueued < f.p.stim && f.p.hp < f.p.hpMax;
+    const canStim = phase === "aim" && apLeft >= AP_COST && stimQueued < f.p.stim && f.p.hp < f.p.hpMax;
     const predicted = queue.reduce((sum, q) => {
       if (q.stim) return sum;
-      const part = f.c.parts.find((x) => x.key === q.part);
-      return sum + Math.round(f.p.dmg * part.mult * (q.crit ? 2 : 1 - f.c.absorb));
+      return sum + shotDamage(f, f.c.parts.find((x) => x.key === q.part), q.crit, q.bash);
     }, 0);
 
     function add(partKey) {
-      if (phase !== "aim" || apLeft < f.p.cost) return;
-      const crit = armed && critReady;
-      setQueue((q) => [...q, { part: partKey, crit }]);
-      if (crit) setArmed(false);
+      if (phase !== "aim" || apLeft < shotCost) return;
+      const crit = critArmed && critReady;
+      setQueue((q) => [...q, { part: partKey, crit, bash: bashNext }]);
+      if (crit) setCritArmed(false);
     }
     function addStim() { if (canStim) setQueue((q) => [...q, { stim: true }]); }
-    function undo() { setQueue((q) => { const last = q[q.length - 1]; if (last?.crit) setArmed(true); return q.slice(0, -1); }); }
+    function undo() { setQueue((q) => { const last = q[q.length - 1]; if (last?.crit) setCritArmed(true); return q.slice(0, -1); }); }
 
     async function creatureAttacks(st) {
       say(T.cCreatureTurn);
@@ -809,7 +889,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
 
     async function execute() {
       const st = copy(f), shots = queue;
-      setPhase("exec"); setQueue([]); setArmed(false);
+      setPhase("exec"); setQueue([]); setCritArmed(false);
       for (const shot of shots) {
         if (shot.stim) {
           const { heal } = useStimpak(st);
@@ -821,7 +901,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
         const r = playerShot(st, shot.part, shot.crit, rng);
         setF(copy(st)); setFlash(r);
         const label = st.c.parts.find((x) => x.key === shot.part).label[lang] ?? "";
-        say(r.hit ? `${label}: -${r.dmg}${r.crit ? " (" + T.cCrit + ")" : ""}${r.crippled ? " · " + T.cCrippled : ""}` : `${label}: ${T.cMiss}`);
+        say((r.bash ? `${T.cBash} · ` : "") + (r.hit ? `${label}: -${r.dmg}${r.crit ? " (" + T.cCrit + ")" : ""}${r.crippled ? " · " + T.cCrippled : ""}` : `${label}: ${T.cMiss}`));
         await sleep(750);
         if (!alive.current) return;
         setFlash(null);
@@ -853,7 +933,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const focusKey = focus && f.c.parts.some((x) => x.key === focus) ? focus : "torso";
     const placed = layoutLabels(f.c.parts);
     const pick = (key) => { setFocus(key); add(key); };
-    const canShoot = phase === "aim" && apLeft >= f.p.cost;
+    const canShoot = phase === "aim" && apLeft >= shotCost;
     const glows = f.c.parts.map((part) => {
       const [x, y, w, hh] = part.box;
       const queued = queue.some((q) => q.part === part.key);
@@ -880,7 +960,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
         });
       }));
     const labels = placed.map(({ part, side, ly }) => {
-      const hit = hitChance(f, part);
+      const hit = hitChance(f, part, bashNext);
       const queued = queue.filter((q) => q.part === part.key).length;
       const fl = flash && flash.part === part.key ? flash : null;
       return h("button", {
@@ -919,9 +999,23 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       h("span", { className: "muted" }, T.cCrit),
       h("div", { className: "vats-bar crit" + (f.p.crit >= 100 ? " full" : "") }, h("span", { style: { width: `${Math.min(100, f.p.crit)}%` } })),
       h("button", {
-        className: "btn vats-critbtn" + (armed ? " on" : ""), disabled: !critReady || phase !== "aim", title: T.critHint,
-        onClick: () => setArmed((a) => !a),
-      }, armed ? T.cCritArmed : T.cCrit));
+        className: "btn vats-critbtn" + (critArmed ? " on" : ""), disabled: !critReady || phase !== "aim", title: T.critHint,
+        onClick: () => setCritArmed((a) => !a),
+      }, critArmed ? T.cCritArmed : T.cCrit));
+    const ammoText = f.p.ammo === null ? T.cMelee : `${AMMO[wpn.ammo][lang] ?? AMMO[wpn.ammo].en}: ${Math.max(0, f.p.ammo - roundsQueued)}`;
+    const weaponBar = h("div", { className: "vats-weapon" + (bashNext ? " empty" : "") },
+      h("img", { src: `img/weapons/${f.p.weapon}.webp`, alt: "" }),
+      h("div", null, h("strong", null, wpn[lang] ?? wpn.en), h("small", { className: "muted" }, bashNext ? T.cNoAmmo : ammoText)));
+    // the weapon is chosen before the fight: one card per weapon owned
+    const choose = (key) => { setF(start(key)); };
+    const weaponCards = h("div", { className: "vats-weapons" }, weapons.map((key) => {
+      const w = WEAPONS[key], n = w.ammo ? ammo[w.ammo] ?? 0 : null;
+      return h("button", { key, className: "vats-wcard" + (key === f.p.weapon ? " on" : ""), "data-weapon": key, onClick: () => choose(key) },
+        h("img", { src: `img/weapons/${key}.webp`, alt: "" }),
+        h("strong", null, w[lang] ?? w.en),
+        h("small", null, `${w.ap} ${T.cAp} · ${T.cDmg} ${armed(player, key, 0).dmg}`),
+        h("small", { className: n === 0 ? "bad" : "muted" }, n === null ? T.cMelee : `${T.cAmmo} ${n}`));
+    }));
 
     if (phase === "intro") {
       return h("div", { className: "screen quiz vats" },
@@ -938,6 +1032,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
           creature.notes.map((n, i) => h("p", { key: i }, n[lang] ?? n.en))) : null,
         creature.derived?.some((x) => x === "hp" || x === "dmg") && h("p", { className: "muted vats-est" }, T.cEst),
         creature.derived?.includes("weak") && h("p", { className: "muted vats-est" }, T.cEstWeak),
+        h("p", { className: "muted vats-wlabel" }, T.cChoose), weaponCards,
         h("div", { className: "vats-choice" },
           h("button", { className: "btn primary", "data-act": "fight", onClick: () => { setPhase("aim"); say(T.cAim); } }, "⚔ ", T.cFight),
           h("button", { className: "btn", "data-act": "flee", disabled: !info.allowed, onClick: flee }, "➜ ", T.cFlee)),
@@ -955,10 +1050,10 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       stage,
       h("div", { className: "vats-ap" },
         h("span", { className: "muted" }, T.cAp),
-        h("div", { className: "vats-pips" }, Array.from({ length: maxShots(f) }, (_, i) =>
-          h("i", { key: i, className: i < queue.length ? "used" : i < f.p.ap / f.p.cost ? "free" : "spent" }))),
+        h("div", { className: "vats-pips" }, Array.from({ length: f.p.apMax }, (_, i) => // one pip per action point
+          h("i", { key: i, className: i < f.p.ap - apLeft ? "used" : i < f.p.ap ? "free" : "spent" }))),
         h("span", null, `${Math.max(0, apLeft)}/${f.p.apMax}`)),
-      meter,
+      meter, weaponBar,
       h("div", { className: "vats-me" }, h("span", { className: "muted" }, T.cHp), bar("me", f.p.hp, f.p.hpMax), h("em", null, `${f.p.hp}/${f.p.hpMax}`)),
       h("div", { className: "vats-actions" },
         h("button", { className: "btn", disabled: phase !== "aim" || !queue.length, onClick: undo }, T.cUndo),
@@ -978,13 +1073,14 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const [sel, setSel] = useState(null);
     const [note, setNote] = useState(null); // { kind: "found" | "failed" | "noq" | "defeat" | "fled" | "msg", ... }
     const [mission, setMission] = useState(null);
+    const [shopOpen, setShopOpen] = useState(false);
     const frame = useCallback((f, fr) => viewAround([...f].map((id) => byId.get(id)).concat(fr), radius * 0.6, 260), [byId, radius]);
     const [view, setView] = useState(() => frame(found, frontier));
     // the adventure: health, stimpaks, caps and position, kept between missions (max health follows the app's level / SPECIAL)
     const hpMax = useMemo(() => playerOf(store).hpMax, []);
     const [adv, setAdv] = useState(() => {
       const a = saved.adv?.[mapKey];
-      return a && byId.has(a.at) ? { ...a, hp: Math.min(a.hp, hpMax) } : newAdventure(hpMax, map.start, (saved.discovered[mapKey] ?? []).length);
+      return a && byId.has(a.at) ? withKit({ ...a, hp: Math.min(a.hp, hpMax) }) : newAdventure(hpMax, map.start, (saved.discovered[mapKey] ?? []).length);
     });
     const total = map.targets.length;
     const foundTargets = map.targets.filter((id) => found.has(id)).length;
@@ -1024,25 +1120,25 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     }
     function fightDone(result, left) {
       const m = mission;
-      const r = advAfterFight(adv, { result, ...left, level: m.creature.level }, hpMax, Math.random);
+      const r = advAfterFight(equip(adv, left.equip), { result, ...left, level: m.creature.level }, hpMax, Math.random);
       update(r.a);
-      if (result === "win") { setMission({ ...m, stage: "quiz", gain: r.gain }); return; }
+      if (result === "win") { setMission({ ...m, stage: "quiz", gain: r.gain, loot: r.loot }); return; }
       setMission(null);
       if (result === "lose") { setSel(null); setNote({ kind: "defeat", name: m.creature.name, loss: r.loss, back: byId.get(r.a.at) }); }
       else if (result === "flee") setNote({ kind: "fled", name: m.creature.name });
     }
     function missionDone({ correct, total: tot }) {
-      const { target, gain = 0, quiet } = mission;
+      const { target, gain = 0, quiet, loot: fightLoot } = mission;
       setMission(null);
       if (correct >= Math.min(MISSION_PASS, tot)) {
         const f = new Set(found).add(target.id);
         const r = advAfterDiscover(adv, target.id, isSafePlace(map, target), Math.random);
         sound("caps");
         setFound(f); setAdv(r.a); persist(f, r.a); setSel(null);
-        setNote({ kind: "found", m: target, caps: r.caps + gain, stim: r.stim, quiet });
+        setNote({ kind: "found", m: target, caps: r.caps + gain, stim: r.stim, quiet, loot: [fightLoot, r.loot].filter(Boolean) });
         setView(frame(f, frontierOf(map, byId, f, radius * 0.85)));
       } else {
-        setNote({ kind: "failed", correct, total: tot, gain, quiet });
+        setNote({ kind: "failed", correct, total: tot, gain, quiet, loot: [fightLoot].filter(Boolean) });
       }
     }
     function restart() {
@@ -1053,7 +1149,8 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     }
 
     if (mission?.stage === "fight") {
-      return h(Encounter, { key: mission.target.id, creature: mission.creature, lang, store, onResult: fightDone, hp: adv.hp, stim: adv.stim });
+      return h(Encounter, { key: mission.target.id, creature: mission.creature, lang, store, onResult: fightDone, hp: adv.hp, stim: adv.stim,
+        weapons: adv.weapons, equip: adv.equip, ammo: adv.ammo });
     }
     if (mission) {
       return h(Quiz, {
@@ -1090,6 +1187,27 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       h("span", { className: "pm-hud-item", "data-stim": adv.stim }, `${T.aStim} ${adv.stim}`),
       h("span", { className: "pm-hud-item", "data-caps": adv.caps }, `${adv.caps} ${T.aCaps}`));
     const quietLine = (n) => n.quiet && h("p", { className: "muted" }, T.aNoEncounter);
+    const ammoName = (type) => AMMO[type][lang] ?? AMMO[type].en;
+    const lootLine = (n) => n.loot?.length > 0 && h("p", { className: "pm-gain" }, T.aLoot, " ", n.loot.map((l) => `${l.n} ${ammoName(l.type)}`).join(", "));
+    const wpn = WEAPONS[adv.equip] ?? WEAPONS.knife;
+    const weaponLine = h("p", { className: "muted pm-at pm-weapon" }, h("img", { src: `img/weapons/${adv.equip}.webp`, alt: "" }),
+      `${T.aWeapon}: ${wpn[lang] ?? wpn.en}`, wpn.ammo ? ` · ${ammoName(wpn.ammo)} ${adv.ammo[wpn.ammo] ?? 0}` : "");
+    // the shop of a settlement: the weapons you do not own yet, and ammo for the guns you have
+    const ammoTypes = [...new Set(adv.weapons.map((k) => WEAPONS[k].ammo).filter(Boolean))];
+    const shop = h("div", { className: "pm-shop" },
+      h("strong", null, T.shopWeapons),
+      Object.entries(WEAPONS).filter(([, w]) => w.price > 0).map(([key, w]) => h("div", { key, className: "pm-shop-row" },
+        h("img", { src: `img/weapons/${key}.webp`, alt: "" }),
+        h("span", null, h("b", null, w[lang] ?? w.en), h("small", { className: "muted" },
+          `${w.ap} ${T.cAp} · ${T.cDmg} ×${w.mult}${w.melee ? " · " + T.cMelee : " · " + ammoName(w.ammo)}`)),
+        adv.weapons.includes(key) ? h("small", { className: "muted" }, T.owned)
+          : h("button", { className: "btn", "data-buy": key, disabled: !canBuyWeapon(adv, key),
+            onClick: () => { update(buyWeapon(adv, key)); setNote({ kind: "msg", text: `${T.aBoughtW} ${w[lang] ?? w.en}` }); } }, `${w.price} ${T.aCaps}`))),
+      ammoTypes.length > 0 && h("strong", null, T.shopAmmo),
+      ammoTypes.map((type) => h("div", { key: type, className: "pm-shop-row" },
+        h("span", null, h("b", null, `${AMMO[type].pack} × ${ammoName(type)}`), h("small", { className: "muted" }, `${T.cAmmo}: ${adv.ammo[type] ?? 0}`)),
+        h("button", { className: "btn", "data-buy": type, disabled: !canBuyAmmo(adv, type),
+          onClick: () => { update(buyAmmo(adv, type)); setNote({ kind: "msg", text: `${T.aBoughtA} ${AMMO[type].pack} ${ammoName(type)}` }); } }, `${AMMO[type].price} ${T.aCaps}`))));
     const campPanel = camp && h("div", { className: "pm-camp" },
       h("div", null,
         h("strong", null, camp.id === map.start ? T.campVault : T.camp, ": ", clean(camp.name)),
@@ -1099,8 +1217,10 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
           h("button", { className: "btn", "data-act": "rest", disabled: !canRest(adv, hpMax, map.start), onClick: () => { update(rest(adv, hpMax, map.start)); setNote({ kind: "msg", text: T.aRested }); } },
             T.aRest, " · ", restCost(adv, map.start) ? `${restCost(adv, map.start)} ${T.aCaps}` : T.aRestFree),
           h("button", { className: "btn", "data-act": "buy", disabled: !canBuy(adv), onClick: () => { update(buyStim(adv)); setNote({ kind: "msg", text: T.aBought }); } },
-            T.aBuy, " · ", `${ADV.stimPrice} ${T.aCaps}`))
-        : h("button", { className: "btn primary", "data-act": "fast", onClick: () => { update(fastTravel(adv, camp.id)); setSel(null); setNote(null); } }, "➜ ", T.aFast));
+            T.aBuy, " · ", `${ADV.stimPrice} ${T.aCaps}`),
+          h("button", { className: "btn", "data-act": "shop", onClick: () => setShopOpen((o) => !o) }, shopOpen ? T.shopClose : T.shop))
+        : h("button", { className: "btn primary", "data-act": "fast", onClick: () => { update(fastTravel(adv, camp.id)); setSel(null); setNote(null); } }, "➜ ", T.aFast),
+      camp.id === adv.at && shopOpen && shop);
 
     return h("div", { className: "screen quiz" },
       h(Header, { title: map.label, i: 0, n: 0, onExit, T }),
@@ -1109,19 +1229,20 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       hud,
       h(MapView, { map, view, setView, onTap, labels: T, home: frame(found, frontier), reveal }, overlay),
       here && h("p", { className: "muted pm-at" }, T.aAt, " ", clean(here.name)),
+      weaponLine,
       complete && h("div", { className: "feedback ok" }, h("strong", null, T.complete)),
       !complete && !selected && !note && h("p", { className: "muted center pm-hint" }, T.pickDest),
       note?.kind === "found" && h("div", { className: "feedback ok" },
         h("strong", null, T.discovered, ": ", clean(note.m.name)),
         typeOf(map, lang, note.m) && h("p", null, typeOf(map, lang, note.m)),
         quietLine(note),
-        h("p", { className: "pm-gain" }, `+${note.caps} ${T.aGotCaps}`, note.stim ? ` · ${T.aGotStim}` : ""),
+        h("p", { className: "pm-gain" }, `+${note.caps} ${T.aGotCaps}`, note.stim ? ` · ${T.aGotStim}` : ""), lootLine(note),
         h(Fact, { facts, place: note.m, lang, T }),
         h("div", { className: "fb-actions" },
           h("a", { className: "btn", href: wikiUrl(note.m), target: "_blank", rel: "noreferrer" }, T.wiki, " ↗"))),
       note?.kind === "failed" && h("div", { className: "feedback ko" },
         h("strong", null, T.failed, ` (${note.correct}/${note.total})`), quietLine(note),
-        note.gain > 0 && h("p", { className: "pm-gain" }, `+${note.gain} ${T.aGotCaps}`), h("p", null, T.retry)),
+        note.gain > 0 && h("p", { className: "pm-gain" }, `+${note.gain} ${T.aGotCaps}`), lootLine(note), h("p", null, T.retry)),
       note?.kind === "noq" && h("div", { className: "feedback ko" }, h("p", null, T.needsQuestions)),
       note?.kind === "defeat" && h("div", { className: "feedback ko" }, h("strong", null, `${T.defeatNote} ${note.name}`),
         h("p", null, `-${note.loss} ${T.aCaps}`, note.back ? ` · ${T.aBack} ${clean(note.back.name)}` : "")),

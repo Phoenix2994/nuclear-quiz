@@ -103,8 +103,8 @@
 .vats-bar.crit>span{background:var(--warn)}
 .vats-bar.crit.full{box-shadow:0 0 8px var(--warn)}
 .vats-bar.enemy>.vats-pred,.vats-bar>.vats-pred{background:repeating-linear-gradient(45deg,#fff 0 3px,#999 3px 6px);opacity:.75;transition:none}
-.vats-pips{display:flex;gap:4px;flex:1;flex-wrap:wrap}
-.vats-pips i{width:22px;height:12px;border:1px solid var(--fg-dim);border-radius:2px;display:block}
+.vats-pips{display:flex;gap:3px;flex:1;flex-wrap:wrap}
+.vats-pips i{flex:1 1 8px;max-width:22px;min-width:6px;height:12px;border:1px solid var(--fg-dim);border-radius:2px;display:block}
 .vats-pips i.free{background:var(--fg)}
 .vats-pips i.used{background:var(--warn);border-color:var(--warn)}
 .vats-pips i.spent{opacity:.3}
@@ -145,3 +145,25 @@
 .pm-you{fill:var(--warn);stroke:#020a04}
 .vats-stim{align-self:center;font-size:13px}
 .vats-stim em{font-style:normal;color:var(--warn)}
+/* weapons: chooser before the fight, weapon in use, shop */
+.vats-wlabel{margin:4px 0 0;font-size:12px;letter-spacing:.1em}
+.vats-weapons{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px}
+.vats-wcard{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px;border:1px solid var(--fg-dim);border-radius:4px;background:rgba(2,10,4,.6);color:var(--fg);font:inherit;cursor:pointer;text-align:center}
+.vats-wcard img{height:42px;max-width:100%;object-fit:contain}
+.vats-wcard strong{font-size:12px}
+.vats-wcard small{font-size:11px}
+.vats-wcard small.bad{color:var(--bad);text-shadow:none}
+.vats-wcard.on{border-color:var(--warn);box-shadow:0 0 8px rgba(255,179,71,.5)}
+.vats-weapon{display:flex;align-items:center;gap:10px;font-size:13px}
+.vats-weapon img{height:30px;width:72px;object-fit:contain}
+.vats-weapon div{display:flex;flex-direction:column}
+.vats-weapon.empty small{color:var(--bad);text-shadow:none}
+.pm-weapon{display:flex;align-items:center;gap:8px}
+.pm-weapon img{height:18px;width:44px;object-fit:contain}
+.pm-shop{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--fg-dim);padding-top:8px}
+.pm-shop>strong{font-size:12px;letter-spacing:.12em;color:var(--warn);text-shadow:none}
+.pm-shop-row{display:flex;align-items:center;gap:8px}
+.pm-shop-row img{height:28px;width:64px;object-fit:contain;flex:none}
+.pm-shop-row span{flex:1;display:flex;flex-direction:column;min-width:0}
+.pm-shop-row small{font-size:11px}
+.pm-shop-row .btn{flex:none;width:auto;padding:6px 10px;font-size:12px;white-space:nowrap}

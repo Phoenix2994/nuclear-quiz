@@ -68,7 +68,7 @@ console.log("A. ONE SHOT IS ENOUGH: the Fallout 3 radroach has 5 HP on its wiki 
   check(await page.locator('[data-act="flee"]').isDisabled(), "cannot flee a creature as fast as you (speed 5 vs 4)");
   await page.click('[data-act="fight"]');
   await zone(page, "head").click();
-  check((await page.locator(".vats-pips i.used").count()) === 1, "one shot queued, one pip spent");
+  check((await page.locator(".vats-pips i.used").count()) === 2, "one shot queued, its 2 action points spent");
   await page.click('[data-act="exec"]');
   await page.waitForSelector(".feedback.ok");
   check((await page.textContent(".feedback strong")).includes("DEFEATED"), "victory after a single shot");
@@ -85,7 +85,7 @@ console.log("B. ONE SHOT IS NOT ENOUGH: Fallout 4 feral ghoul (35 HP, 9% armour,
   await page.click('[data-act="fight"]');
   check((await hp(page, ".vats-hp em")) === "35/35", "ghoul starts at 35/35");
   for (let i = 0; i < 3; i++) await zone(page, "body").click();
-  check((await page.locator(".vats-pips i.used").count()) === 3, "three shots queued");
+  check((await page.locator(".vats-pips i.used").count()) === 6, "three shots queued (6 action points)");
   await page.click('[data-act="exec"]');
   await page.waitForSelector('.vats-log p:has-text("attacks")');
   await page.waitForFunction(() => document.querySelector('.vats-zone:not([disabled])'), null, { timeout: 15000 });
@@ -94,7 +94,7 @@ console.log("B. ONE SHOT IS NOT ENOUGH: Fallout 4 feral ghoul (35 HP, 9% armour,
   console.log("     after round 1: creature", afterRound1, "| me", mine);
   check(afterRound1 === "11/35", "24 damage was not enough: creature at 11/35");
   check(mine === "38/53", "the ghoul hit back for 15: me at 38/53");
-  check((await page.locator(".vats-pips i.free").count()) === 4, "action points refilled for round 2");
+  check((await page.locator(".vats-pips i.free").count()) === 8, "action points refilled for round 2");
   await zone(page, "body").click(); await zone(page, "body").click();
   await page.click('[data-act="exec"]');
   await page.waitForSelector(".feedback.ok", { timeout: 15000 });
