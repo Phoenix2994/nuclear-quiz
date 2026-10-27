@@ -25,6 +25,14 @@ GAMES = {
     "fo4": ("Map:Fo4 Commonwealth", "Fallout 4", "fo4", "Commonwealth", 28, False),
     "fo76": ("Map:FO76 Worldmap", "Fallout 76", "fo76", "Appalachia", 28, False),
 }
+# Real in-game Pip-Boy maps with their icons already drawn in (provided by the project owner). They replace the
+# wiki base image for the two main maps. ALIGN maps wiki marker coordinates onto them: (sx, sy, dx, dy), scale about the
+# map centre then shift, in map units; fitted by matching marker positions to the icons visible in the image.
+BAKED = {
+    "fo3": {"file": "tools/sources/fo3-pipboy-map.jpg", "size": (1160, 1160), "align": (1.0, 1.016, -7.8, 2.6), "min_lum": 90},
+    "fnv": {"file": "tools/sources/fnv-pipboy-map.jpg", "size": None, "align": (1.0, 1.004, -1.0, -5.9), "min_lum": 150},
+}
+GROUP_COLOR = {"fo3": (110, 255, 130), "fnv": (255, 186, 96)}  # glyph / tint colour of the maps without baked icons
 # Wiki location lists: locations in italic there are not marked on the Pip-Boy, so they are never asked
 LOCATION_LISTS = {"fo3": "Fallout 3 locations", "fnv": "Fallout: New Vegas locations"}
 SKIP_CATS = {"Unmarked", "Bobbleheads", "Pond/Lake", "Water bodies", "Wooded areas", "Quarry", "Mines"}
@@ -104,7 +112,7 @@ def fetch_file(cache, title):
     return path
 
 
-def duotone(im, lo=(2, 10, 4), hi=(96, 255, 120)):
+def duotone(im, lo=(2, 10, 4), hi=(96, 255, 120)):  # lo/hi: dark and bright colour of the tinted map
     g = im.convert("L")
     lut_r, lut_g, lut_b = [], [], []
     for v in range(256):
@@ -145,6 +153,14 @@ def central_glyph(a):
 
 
 def extract_fo4_icons(im, markers):
+    """Returns {colour name: {FO4 category: path}}."""
+    icons = {}
+    for cname, color in (("green", GROUP_COLOR["fo3"]), ("amber", GROUP_COLOR["fnv"])):
+        icons[cname] = _extract_fo4_icons(im, markers, color, "" if cname == "green" else "-amber")
+    return icons
+
+
+def _extract_fo4_icons(im, markers, color, suffix):
     """FO4's map has its Pip-Boy icons baked in. Crop one clean glyph per category from an isolated marker."""
     pts = [(k["cat"], k["x"] / 1000 * im.width, k["y"] / 1000 * im.height) for k in markers]
     icons = {}
@@ -161,9 +177,9 @@ def extract_fo4_icons(im, markers):
         side = max(a.size) + 4
         sq = Image.new("L", (side, side), 0)
         sq.paste(a, ((side - a.width) // 2, (side - a.height) // 2))
-        res = Image.new("RGBA", (side, side), (110, 255, 130, 0))
+        res = Image.new("RGBA", (side, side), color + (0,))
         res.putalpha(sq)
-        name = "img/maps/icons/fo4-" + re.sub(r"[^a-z0-9]+", "-", cat.lower()).strip("-") + ".png"
+        name = "img/maps/icons/fo4-" + re.sub(r"[^a-z0-9]+", "-", cat.lower()).strip("-") + suffix + ".png"
         res.resize((48, 48), Image.LANCZOS).save(os.path.join(ROOT, name))
         icons[cat] = name
     return icons
@@ -188,20 +204,29 @@ def main():
         m = maps[g]
         (x0, y0), (x1, y1) = m["mapBounds"]
         cats = {c["id"]: c for c in m["categories"]}
-        src = fetch_file(cache, "File:" + m["mapImage"])
-        im = Image.open(src).convert("RGB")
+        src = None if g in BAKED else fetch_file(cache, "File:" + m["mapImage"])
+        baked = BAKED.get(g)
+        if baked:
+            im = Image.open(os.path.join(ROOT, baked["file"])).convert("RGB")
+            if baked["size"]:
+                im = im.resize(baked["size"], Image.LANCZOS)  # the real map is square; the source screenshot is not
+        else:
+            im = Image.open(src).convert("RGB")
         if g == "fo76":
             im = im.resize((2560, 2560), Image.LANCZOS)
-        elif tint:
-            im = duotone(im)
+        elif tint and not baked:
+            if group == "fnv":
+                im = duotone(im, lo=(10, 6, 2), hi=(255, 184, 96))
+            else:
+                im = duotone(im)
         dst = f"img/maps/{g}.webp"
         im.save(os.path.join(ROOT, dst), "WEBP", quality=80 if g != "fo76" else 74, method=6)
 
         icons = {}
-        if tint:
+        if tint and not baked:  # tinted wiki maps carry no icons: draw FO4 glyphs
             for c in m["categories"]:
                 if c["name"] in FO4_ICON_FOR:
-                    icons[c["id"]] = fo4_icons[FO4_ICON_FOR[c["name"]]]
+                    icons[c["id"]] = fo4_icons["amber" if group == "fnv" else "green"][FO4_ICON_FOR[c["name"]]]
 
         names = {}
         for x in m["markers"]:
@@ -211,9 +236,13 @@ def main():
             t = x["popup"]["title"].strip()
             page_t = (x["popup"].get("link") or {}).get("url") or t
             px, py = x["position"]
+            mx, my = (px - x0) / (x1 - x0) * 1000, (py - y0) / (y1 - y0) * 1000
+            if baked:
+                sx, sy, dx, dy = baked["align"]
+                mx, my = (mx - 500) * sx + 500 + dx, (my - 500) * sy + 500 + dy
             markers.append({
                 "id": f"{g}-{i}", "name": t, "page": page_t, "cat": cats[x["categoryId"]]["name"], "cid": x["categoryId"],
-                "x": round((px - x0) / (x1 - x0) * 1000, 1), "y": round((py - y0) / (y1 - y0) * 1000, 1),
+                "x": round(mx, 1), "y": round(my, 1),
             })
         per_cat = {}
         for k in markers:
@@ -225,12 +254,14 @@ def main():
             return (k["cat"] in MAJOR[g] or per_cat[k["cat"]] == 1 or k["name"].lower() in known
                     or k["page"].lower() in known)
 
-        def has_icon(k):  # FO4's map has its icons baked in: keep only markers with a visible glyph
-            if g != "fo4":
+        def has_icon(k):  # maps with baked-in icons: keep only markers with a visible glyph
+            if g != "fo4" and not baked:
                 return True
             cx, cy = k["x"] / 1000 * im.width, k["y"] / 1000 * im.height
-            box = im.crop((int(cx) - 14, int(cy) - 14, int(cx) + 15, int(cy) + 15)).getchannel("G")
-            return box.getextrema()[1] >= 200
+            win = im.crop((int(cx) - 14, int(cy) - 14, int(cx) + 15, int(cy) + 15))
+            if baked:  # the glyph is the brightest thing around the marker; bare terrain stays darker
+                return win.convert("L").getextrema()[1] >= baked["min_lum"]
+            return win.getchannel("G").getextrema()[1] >= 200
 
         targets = [k["id"] for k in markers
                    if k["cat"] not in SKIP_CATS and names[k["name"].lower()] == 1 and notable(k) and has_icon(k)

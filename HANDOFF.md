@@ -14,6 +14,7 @@ dropping the bundle patch.
 | `data/maps.json` | Markers, coordinates, targets, icon paths for FO3 / FNV / FO4 / FO76 (generated) | Copy to the app's static/public folder |
 | `img/maps/*.webp`, `img/maps/icons/*.png` | Map images and marker glyphs (generated) | Copy to static/public |
 | `tools/build_maps.py` | Regenerates the two rows above from the Fallout Wiki | Keep in repo (`python3 tools/build_maps.py`, needs `curl` and Pillow) |
+| `tools/sources/*.jpg` | In-game Pip-Boy maps with icons for FO3 and FNV (input of the build script) | Keep with the tool |
 | `tools/smoke_map.mjs` | Playwright smoke test of the MAP tab | Optional |
 
 ## Integration in the original sources (4 changes)
@@ -63,11 +64,17 @@ Perception (S.P.E.C.I.A.L.) point work like any other quiz. `store.completeSessi
   "Fallout 3 locations" / "Fallout: New Vegas locations" lists show in italic, i.e. not marked on the Pip-Boy, are never asked). `hit` is the tap tolerance in map units.
 - 10 random targets per session; a tap within `hit` of the target is correct. Tapping another marker
   names it in the feedback.
-- FO4 and FO76 images already contain their icons. FO3 and New Vegas images have none: the markers are drawn
-  with the **Fallout 4 icons**, cropped by the build script from the FO4 map (one clean glyph per category,
-  mapping in `FO4_ICON_FOR`).
-- FO3/FNV maps are duotone-tinted green by the build script; FO4 is the original Pip-Boy map; FO76 is the
-  original paper map resized to 2560 px.
+- FO4, FO76 and the two main maps of FO3 and New Vegas are the real in-game maps with their icons already drawn in:
+  nothing is overlaid. FO3 and FNV use the screenshots in `tools/sources/` (provided by the project owner; FNV is the
+  amber original, FO3 is 580x569 so it is upscaled to a square 1160 px and is the softest map). The wiki marker
+  coordinates are re-aligned onto them with `BAKED[...]["align"]` in `tools/build_maps.py` (fitted by matching the
+  markers to the visible icons: FNV is a ~6 px vertical shift, FO3 a small shift plus 1.6% vertical scale). Targets
+  are only markers that show an icon (`min_lum`). A sharper FO3 map would improve it: drop it in `tools/sources/`.
+- The DLC maps (Point Lookout, The Pitt, Anchorage, Honest Hearts, Lonesome Road, Old World Blues) only exist as
+  wiki base images without icons: they are tinted (green for FO3, amber for FNV) and the markers are drawn with
+  **Fallout 4 icons**, cropped by the build script from the FO4 map (one glyph per category, mapping in
+  `FO4_ICON_FOR`, `-amber` variants for New Vegas).
+- FO76 is the original paper map resized to 2560 px.
 
 ## Run and test locally
 
@@ -83,8 +90,8 @@ python3 tools/build_maps.py          # regenerate data + images (cache in .map-c
 - Tune the target list per game (`MAJOR`, `SKIP_CATS` in `tools/build_maps.py`) and the hit radius; add difficulty.
 - Descriptions for the places (the wiki markers only carry a name, a category and a page link).
 - More maps: Fallout 1/2 world maps, Nuka-World / Far Harbor, Broken Steel / Dead Money (the wiki has interactive maps for them too).
-- FO3/FNV icons: the wiki's own recreation of the original markers ("Icon … gamebryo") are still the alternative to the
-  FO4 glyphs; the wiki location lists contain neither icons nor coordinates (fallout.wiki blocks scripted downloads).
+- DLC maps: better with real in-game maps with baked icons, if you have them (add to `tools/sources/` and `BAKED`).
+  The wiki location lists contain neither icons nor coordinates (fallout.wiki blocks scripted downloads).
 - The FO76 map shows the Mappalachia watermark at the bottom of the image (credited in README).
 - The zoom buttons sit over the top-right corner of the map; a target there needs a pan first.
 
