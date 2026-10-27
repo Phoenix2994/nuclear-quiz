@@ -17,8 +17,8 @@ dropping the bundle patch.
 | `tools/sources/*.jpg` | In-game Pip-Boy maps with icons for FO3 and FNV (input of the build script) | Keep with the tool |
 | `data/place-facts.json` | One curiosity (EN + IT) per place that has one: 105 places (generated) | Copy to static/public |
 | `tools/build_facts.py` | Builds it from the wiki's "Behind the scenes" bullets (filtered) and `tools/sources/place-facts-it.json` (hand-written Italian translations) | Keep in repo |
-| `data/creatures.json`, `img/creatures/*.webp` | 95 creatures (FO3 17, FNV 28, FO4 18, FO76 32) with transparent image, level tier, speed and body type (generated) | Copy to static/public |
-| `tools/build_creatures.py` | Builds them from the wiki creature categories; level/speed/body are game-design tables in the script | Keep in repo (needs Pillow) |
+| `data/creatures.json`, `img/creatures/*.webp` | 93 creatures (FO3 17, FNV 26, FO4 18, FO76 32) with transparent image and the wiki figures, body type, weak points (generated) | Copy to static/public |
+| `tools/build_creatures.py` | Builds them from the wiki creature pages; `tools/sources/creature-weakpoints.json` and `creature-notes-it.json` are its hand-curated inputs | Keep in repo (needs Pillow) |
 | `tools/test_combat.mjs`, `tools/smoke_combat.mjs` | Fight engine unit tests and full browser battles with scripted dice | Optional |
 | `tools/smoke_map.mjs` | Playwright smoke test of the MAP tab | Optional |
 
@@ -77,7 +77,7 @@ itself is never altered:
   (`HUE_TINT` in the build script, `hue` in `data/maps.json`) is drawn clipped to a square around each marker.
 - DLC maps: the glyph overlay switches to a recoloured set (`icons_undisc`).
 - FO76: left as it is (fog only), on purpose.
-The 4 nearest undiscovered places also get the green empty-circle marker; discovered icons keep the map's own colour.
+Where the icons are recoloured the recoloured icon is itself the "to discover" marker: only the selected place gets the green ring. On FO76 (icons not recoloured) every place you can travel to has the green empty-circle marker. Discovered icons keep the map's own colour.
 (An earlier approach that wiped the icons with inpainting was dropped: it smudged the maps.)
 
 Categories that are a place's own name (Diamond City, Castle…) are never shown as a hint (`isGeneric`).
@@ -87,36 +87,51 @@ store (the app's "reset progress" does not clear it). In the real sources move t
 
 ## The fight (discovery mode)
 
-Travelling to a place now has two steps: **fight, then quiz**. Rules live in the pure functions at the top of
+Travelling to a place has two steps: **fight, then quiz**. Rules live in the pure functions at the top of
 `assets/pipboy-map.js` (`newFight`, `playerShot`, `creatureTurn`, `fleeInfo`, `pickCreature`), modelled on V.A.T.S.
 (Fallout 3/4: per-part hit chance capped at 95%, action points per shot and a queue of shots, limbs with their own health
 that cripple at zero, a critical meter fed by every shot and faster with Luck, criticals always hit).
 
-1. A creature of the game appears (image, level, speed). The stronger the discovered part of the map (`1 + discovered/5`),
-   the tougher it is (`pickCreature`).
+**Creature data comes from the wiki, not from me** (`tools/build_creatures.py` -> `data/creatures.json`), per creature of
+the game's "creatures" category:
+- level, health, melee damage, damage resistance / threshold: the stats table of the wiki page (the row of the plain creature);
+- body type (which V.A.T.S. zones it has): read from the page's Biology / Characteristics text and categories
+  (quadruped, rodent, crustacean, insect, tentacles...), see `body_of`;
+- weak points and resistances: shown as the wiki sentences (EN, with Italian translations in
+  `tools/sources/creature-notes-it.json`), and encoded as damage multipliers in `tools/sources/creature-weakpoints.json`,
+  each entry carrying the sentence it comes from (`because`). Encoded so far: mirelurk (shell on the body, small face),
+  radscorpion (no weak point, legs resist), cazador (no head bonus), FO4 deathclaw (belly is the weak spot, scales resist),
+  FO76 mirelurk hunter / queen / cave cricket. Crippled antennae (ants, mantises, cazador) are a zone: frenzy = it fights blindly.
+- Not in the wiki, so a fallback that is flagged `derived` in the data and shown with `*` in the UI: level for 8 creatures,
+  health/damage of most FO76 creatures (the FO76 pages have no stats table: health `8 + 10 x level`, damage `2 + 1.5 x level`),
+  speed (read from words like "fast" / "slow", else `SPEED_FALLBACK`), and the body type of 6 creatures (default humanoid).
+  The script prints these lists when it runs. Ravens and night stalkers (not targetable in V.A.T.S. per the wiki) are left out.
+- Armour: the wiki damage resistance becomes a share of the damage absorbed (`absorb_of`); critical hits ignore it.
+
+1. A creature of the game appears with its figures and the weak points text. The more of the map is discovered
+   (`1 + discovered/3`), the higher the level of the creatures that can show up (`pickCreature`).
 2. **Fight** or **Flee**.
 3. Flee is only enabled if you are faster than the creature (`3 + Agility` > its speed: slow 3, normal 5, fast 8, -2 per
-   crippled leg/wing pair) or it is blind (head crippled). It then succeeds with `60 + 10 x speed difference` %; a failed
-   escape gives the creature a free turn. Fleeing ends the mission without discovering the place.
-4. Fight: pick body parts (hit % shown on each zone, current limb health bar), queue as many shots as the AP allow
-   (2 AP per shot, `6 + 2 x Agility` AP), optionally arm the **critical** when the meter is full, press **Execute**. Shots resolve one by
-   one, then the creature strikes back (2 strikes if fast), then your AP refill.
+   crippled leg/wing) or it is blind/frenzied. It succeeds with `60 + 10 x speed difference` %; a failed escape gives the
+   creature a free turn. Fleeing ends the mission without discovering the place.
+4. Fight: pick body parts (hit % and damage multiplier on each zone, limb health bar), queue shots (2 AP each,
+   `6 + 2 x Agility` AP), optionally arm the **critical** when the meter is full, **Execute**. Shots resolve one by one, then the creature
+   strikes back (twice if fast), then your AP refill.
 
 | | Formula |
 |---|---|
-| Creature of level L | health `8 + 10 L`, damage `3 + 2 L`, dodges `2 L`% (+6 if fast) |
+| Creature | health and damage from the wiki; dodges `1.5 x level`% (max 35, +6 if fast); armour absorbs `absorb` of your damage |
 | You | health `40 + 8 End + 5 Lv`, damage `6 + 2 Lv + Str`, hit chance `part accuracy + 3 Per - dodge` (5-95%) |
-| Parts | head acc 45 x2 damage (blinds: creature hit chance halves); torso 80 x1; arms/claws 55 x0.7 (crippled: creature damage -25% each); legs/wings 60 x0.8 (crippled: slower, easier to hit) |
-| Crit meter | `+14 + 3 Luck` per shot, 100 = full; the critical shot always hits and does x2 |
+| Zones | head acc 45 x2 (crippled: creature hit chance halves); torso 80 x1; arms/claws 55 x0.7 (crippled: creature damage -25% each); legs/wings 60 x0.8 (crippled: slower, easier to hit); antennae 35 x0.5 (crippled: frenzy). Wiki weak points replace the multiplier of a zone |
+| Crit meter | `+14 + 3 Luck` per shot, 100 = full; the critical shot always hits, x2, ignores armour |
 
-So a weak creature (a level-1 radroach, 18 HP) can die from one head shot, a stronger one needs several shots over
-several rounds. Player stats come from the app (`stats.level`, `stats.special`: `ts(xp).level` and `ns(progress, key)` in
-the bundle). Win -> quiz (3 of 3 correct), lose or flee -> back to the map. Crippled zones show ✕, the map keeps no HP
-between missions. Everything is tunable: tables `BODIES`, constants in `newFight` / `playerFrom` / `creatureTurn`,
-and `TIERS` / `SPEED` / `BODY` in `tools/build_creatures.py`.
+Weak creatures can die from one shot (the FO3 radroach has 5 HP), strong ones need several rounds, and a New Vegas
+deathclaw (125 damage) kills a level-1 player in one strike: levels come from the real game, the rookie just meets
+creatures of the right tier. Player stats come from the app (`stats.level`, `stats.special`: `ts(xp).level` and
+`ns(progress, key)` in the bundle). Win -> quiz (3 of 3 correct), lose or flee -> back to the map.
 
-Test hook (used by `tools/smoke_combat.mjs`): `window.__PM = { rng, creature, level, fast }` makes dice, the creature and
-the animation speed deterministic. Not set in production.
+Zone rectangles are per body template (`BODIES`), not per picture: on some creatures they only roughly match the drawing.
+Test hook (used by the smoke tests): `window.__PM = { rng, creature, level, fast, invincible }`; not set in production.
 
 ## How the quiz works
 

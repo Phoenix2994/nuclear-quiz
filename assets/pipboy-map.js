@@ -13,7 +13,7 @@ const PICK_PX = 26; // tapping this close (screen px) to a marker selects it
 const ROUNDS = 10;
 const MISSION_QUESTIONS = 3;
 const MISSION_PASS = 3; // correct answers needed to discover a place (all of them)
-const FRONTIER = 4; // how many undiscovered places are offered as next destinations
+const FRONTIER = 8; // at most this many undiscovered places are offered at once
 const STORE_KEY = "wasteland-quiz-map-v1";
 const GROUP_SHORT = { fo3: "FO3", fnv: "FNV", fo4: "FO4", fo76: "76" }; // game chips, in display order
 const WIKI = "https://fallout.fandom.com/wiki/";
@@ -35,7 +35,7 @@ const TEXT = {
     loading: "CARICAMENTO MAPPA…", error: "Impossibile caricare le mappe.",
     zin: "Ingrandisci", zout: "Riduci", zreset: "Inquadra",
     found: "scoperti", mission: "MISSIONE", travel: "VIAGGIA", questions: "domande",
-    unknown: "Luogo sconosciuto", pickDest: "Tocca un punto interrogativo per scegliere la prossima destinazione.",
+    unknown: "Luogo sconosciuto",
     discovered: "SCOPERTO", failed: "Missione fallita", retry: "Riprova con la stessa destinazione o scegline un'altra.",
     complete: "MAPPA COMPLETATA", restart: "RICOMINCIA", restartConfirm: "Vuoi cancellare i luoghi scoperti su questa mappa?",
     needsQuestions: "Nessuna domanda disponibile per questo gioco.",
@@ -46,6 +46,8 @@ const TEXT = {
     cMiss: "MANCATO", cCrippled: "STORPIATO", cCreatureTurn: "La creatura attacca!", cHitYou: "ti colpisce", cMissYou: "ti manca",
     cWin: "CREATURA SCONFITTA", cWinSub: "Ora puoi esplorare il luogo: rispondi al quiz.", cLose: "SEI STATO SCONFITTO", cLoseSub: "Ti ritiri per curarti. Riprova.",
     cFled: "SEI FUGGITO", cFledSub: "Sei scappato dalla creatura.", cFleeFail: "Fuga fallita!", cShot: "colpo", cQueue: "In coda", cYouHit: "Colpito", cCont: "CONTINUA",
+    cDmg: "Danno", cResist: "Resistenza ai danni", cWeak: "PUNTI DEBOLI E RESISTENZE", cEst: "* stimato: il wiki non riporta il valore",
+    pickDest: "Tocca una destinazione per scegliere dove andare.",
     defeatNote: "Sconfitto da", fledNote: "Sei fuggito da", critHint: "Si carica a ogni colpo (più in fretta con la Fortuna): il colpo critico colpisce sempre e fa doppio danno.",
     credit: "Mappe e posizioni: Fallout Wiki (CC BY-SA 3.0). Immagini di proprietà dei rispettivi titolari.",
     credit76: " Mappa di Fallout 76: Mappalachia.",
@@ -66,7 +68,7 @@ const TEXT = {
     loading: "LOADING MAP…", error: "Unable to load the maps.",
     zin: "Zoom in", zout: "Zoom out", zreset: "Frame",
     found: "discovered", mission: "MISSION", travel: "TRAVEL", questions: "questions",
-    unknown: "Unknown place", pickDest: "Tap a question mark to pick the next destination.",
+    unknown: "Unknown place",
     discovered: "DISCOVERED", failed: "Mission failed", retry: "Try the same destination again or pick another.",
     complete: "MAP COMPLETE", restart: "START OVER", restartConfirm: "Clear the places discovered on this map?",
     needsQuestions: "No questions available for this game.",
@@ -77,6 +79,8 @@ const TEXT = {
     cMiss: "MISS", cCrippled: "CRIPPLED", cCreatureTurn: "The creature attacks!", cHitYou: "hits you", cMissYou: "misses you",
     cWin: "CREATURE DEFEATED", cWinSub: "Now you can explore the place: answer the quiz.", cLose: "YOU WERE DEFEATED", cLoseSub: "You retreat to heal. Try again.",
     cFled: "YOU ESCAPED", cFledSub: "You got away from the creature.", cFleeFail: "Escape failed!", cShot: "shot", cQueue: "Queued", cYouHit: "Hit", cCont: "CONTINUE",
+    cDmg: "Damage", cResist: "Damage resistance", cWeak: "WEAK POINTS AND RESISTANCES", cEst: "* estimated: the wiki gives no figure",
+    pickDest: "Tap a destination to pick where to go.",
     defeatNote: "Defeated by", fledNote: "You escaped from", critHint: "It charges with every shot (faster with Luck): a critical shot always hits and does double damage.",
     credit: "Maps and positions: Fallout Wiki (CC BY-SA 3.0). Images belong to their respective owners.",
     credit76: " Fallout 76 map: Mappalachia.",
@@ -105,7 +109,7 @@ const CAT_IT = {
 };
 
 const clean = (s) => s.trim();
-// test hook: window.__PM = { rng, creature, level } makes fights deterministic (see tools/smoke_combat.mjs)
+// test hook: window.__PM = { rng, creature, level, fast, invincible } makes fights deterministic (see tools/smoke_combat.mjs)
 const testHook = () => (typeof window !== "undefined" ? window.__PM ?? {} : {});
 const rng = () => (testHook().rng ?? Math.random)();
 const sleep = (ms) => new Promise((r) => setTimeout(r, testHook().fast ? 5 : ms));
@@ -151,8 +155,9 @@ function saveSaved(s) {
 // Rules, modelled on V.A.T.S. (Fallout 3 / 4): pick a body part, see its hit chance (capped at 95%), spend action points
 // per attack and queue several shots, hit a limb until its own health bar is empty to cripple it, a critical meter that
 // fills with every shot (faster with Luck) and turns the next shot into a guaranteed critical hit.
-// Level: a creature of level L has 8 + 10 L health, hits for 3 + 2 L and dodges 2 L %. A weak creature can die from one
-// good shot (a head shot, or a critical); stronger ones need several shots and hit back between your turns.
+// Creature figures (level, health, damage, damage resistance, body, weak points) come from its Fallout Wiki page
+// (data/creatures.json, tools/build_creatures.py); a missing figure falls back to health 8 + 10 L and damage 3 + 2 L.
+// A weak creature can die from one good shot (a head shot, or a critical); stronger ones need several shots and hit back.
 const SPEED_VALUE = { slow: 3, normal: 5, fast: 8 };
 const AP_COST = 2; // action points per shot
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -185,23 +190,38 @@ export function playerFrom(progress, stats) {
   return { level: lvl, hpMax: 40 + 8 * sp("E") + 5 * lvl, apMax: 6 + 2 * sp("A"), cost: AP_COST, dmg: 6 + 2 * lvl + sp("S"), per: sp("P"), agi: sp("A"), lck: sp("L") };
 }
 
-export function newFight(creature, level, player) {
-  const hpMax = 8 + 10 * level;
-  const parts = BODIES[bodyOf(creature)].map((z) => {
-    const max = z.share ? Math.max(1, Math.round(z.share * hpMax)) : 0;
-    return { ...z, max, hp: max, crippled: false };
+// the V.A.T.S. zones of a creature: the template of its body type, plus the antennae when the wiki says crippling them
+// sends the creature into a frenzy
+const ANTENNAE = { arthropod: [0, 0, 0.35, 0.2], flyer: [0.3, 0, 0.4, 0.1] };
+export function zonesFor(creature) {
+  const body = bodyOf(creature), zones = BODIES[body].slice();
+  if (creature.antennae && ANTENNAE[body]) zones.push(Z("antennae", "Antenne", "Antennae", 35, 0.5, 0.2, "frenzy", ANTENNAE[body]));
+  return zones;
+}
+// weak points / resistances (final damage multipliers, backed by a wiki sentence) are stored by role: head, torso, arms, legs
+// so they apply to any body template
+const roleOf = (z) => (z.key === "head" ? "head" : z.key === "torso" ? "torso" : z.effect === "weak" ? "arms" : z.effect === "slow" ? "legs" : null);
+
+export function newFight(creature, player) {
+  const level = creature.level;
+  const hpMax = Math.min(600, creature.hp ?? 8 + 10 * level);
+  const parts = zonesFor(creature).map((z) => {
+    const role = roleOf(z), max = z.share ? Math.max(1, Math.round(z.share * hpMax)) : 0;
+    return { ...z, mult: creature.weak?.[role] ?? z.mult, acc: z.acc + (creature.weakAcc?.[role] ?? 0), max, hp: max, crippled: false };
   });
-  return { c: { name: creature.name, level, hpMax, hp: hpMax, speed: creature.speed, parts }, p: { ...player, hp: player.hpMax, ap: player.apMax, crit: 0 }, round: 1 };
+  const dmg = Math.max(creature.dmg ?? 0, Math.round(2 + 1.5 * level)); // creatures that fight with weapons have a tiny melee figure
+  return { c: { name: creature.name, level, hpMax, hp: hpMax, dmg, absorb: creature.absorb ?? 0, speed: creature.speed, parts },
+    p: { ...player, hp: player.hpMax, ap: player.apMax, crit: 0 }, round: 1 };
 }
 
 const effects = (c) => ({
-  blind: c.parts.some((p) => p.crippled && p.effect === "blind"),
+  blind: c.parts.some((p) => p.crippled && (p.effect === "blind" || p.effect === "frenzy")), // a frenzied creature fights blindly too
   weak: c.parts.filter((p) => p.crippled && p.effect === "weak").length,
   slow: c.parts.filter((p) => p.crippled && p.effect === "slow").length,
 });
 export const creatureSpeed = (c) => Math.max(1, SPEED_VALUE[c.speed] - 2 * effects(c).slow);
 export const hitChance = (f, part) => {
-  const evasion = 2 * f.c.level + (f.c.speed === "fast" ? 6 : 0) - (effects(f.c).slow ? 6 : 0);
+  const evasion = Math.min(35, Math.round(1.5 * f.c.level)) + (f.c.speed === "fast" ? 6 : 0) - (effects(f.c).slow ? 6 : 0);
   return clamp(Math.round(part.acc + 3 * f.p.per - evasion), 5, 95);
 };
 export const critGain = (p) => 14 + 3 * p.lck; // meter points per shot, 100 = full
@@ -212,7 +232,8 @@ export function playerShot(f, partKey, crit, rnd) {
   const part = f.c.parts.find((x) => x.key === partKey);
   const chance = hitChance(f, part), hitRoll = rnd() * 100, dmgRoll = rnd();
   const hit = crit || hitRoll < chance;
-  const dmg = hit ? Math.max(1, Math.round(f.p.dmg * part.mult * (crit ? 2 : 1) * (0.9 + dmgRoll * 0.2))) : 0;
+  // armour absorbs a share of the damage, except from a critical hit (as in Fallout 4)
+  const dmg = hit ? Math.max(1, Math.round(f.p.dmg * part.mult * (crit ? 2 : 1 - f.c.absorb) * (0.9 + dmgRoll * 0.2))) : 0;
   f.p.ap -= f.p.cost;
   f.p.crit = crit ? 0 : Math.min(100, f.p.crit + critGain(f.p));
   f.c.hp = Math.max(0, f.c.hp - dmg);
@@ -231,7 +252,7 @@ export function creatureTurn(f, rnd) {
   for (let i = 0; i < strikes && f.p.hp > 0; i++) {
     const chance = clamp(72 - 3 * f.p.agi, 10, 95) * (e.blind ? 0.5 : 1), hitRoll = rnd() * 100, dmgRoll = rnd();
     const hit = hitRoll < chance;
-    const dmg = hit ? Math.max(1, Math.round((3 + 2 * f.c.level) * (1 - 0.25 * Math.min(2, e.weak)) * (0.85 + dmgRoll * 0.3))) : 0;
+    const dmg = hit ? Math.max(1, Math.round(f.c.dmg * (1 - 0.25 * Math.min(2, e.weak)) * (0.85 + dmgRoll * 0.3))) : 0;
     f.p.hp = Math.max(0, f.p.hp - dmg);
     out.push({ hit, dmg, chance: Math.round(chance) });
   }
@@ -246,15 +267,15 @@ export function fleeInfo(f) {
 }
 export const tryFlee = (f, rnd) => rnd() * 100 < fleeInfo(f).chance;
 
-// which creature meets you: the stronger the map is explored, the tougher it gets
+// which creature meets you: the more of the map is discovered, the higher the level of the creatures that can show up
 export function pickCreature(pool, discovered, rnd = Math.random, forced = {}) {
-  const mapLevel = 1 + Math.floor(discovered / 5);
+  const mapLevel = 1 + Math.floor(discovered / 3);
   const forcedCreature = forced.creature && pool.find((c) => c.name === forced.creature);
   const eligible = pool.filter((c) => c.level <= mapLevel + 3);
-  const list = eligible.length ? eligible : [...pool].sort((a, b) => a.level - b.level).slice(0, 3);
+  const recent = eligible.filter((c) => c.level >= mapLevel - 6); // no radroaches once the map is well explored
+  const list = recent.length ? recent : eligible.length ? eligible : [...pool].sort((a, b) => a.level - b.level).slice(0, 3);
   const creature = forcedCreature ?? list[Math.floor(rnd() * list.length)];
-  const level = forced.level ?? Math.max(creature.level, mapLevel + Math.floor(rnd() * 3) - 1);
-  return { creature, level };
+  return { creature: forced.level ? { ...creature, level: forced.level } : creature };
 }
 
 export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
@@ -623,12 +644,16 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
 
   // ---- mode 3: discover the map
 
-  function frontierOf(map, byId, found) {
+  // the places you can travel to: undiscovered targets inside the cleared area around what you already know
+  // (the nearest one if none is that close), nearest first
+  function frontierOf(map, byId, found, reach) {
     const reached = [...found].map((id) => byId.get(id)).filter(Boolean);
-    return map.targets.filter((id) => !found.has(id)).map((id) => {
+    const rest = map.targets.filter((id) => !found.has(id)).map((id) => {
       const m = byId.get(id);
       return { m, d: Math.min(...reached.map((r) => dist(r, m))) };
-    }).sort((a, b) => a.d - b.d).slice(0, FRONTIER).map((o) => o.m);
+    }).sort((a, b) => a.d - b.d);
+    const near = rest.filter((o) => o.d <= reach);
+    return (near.length ? near : rest.slice(0, 1)).slice(0, FRONTIER).map((o) => o.m);
   }
 
   // unseen questions first, so every mission teaches something new
@@ -644,10 +669,14 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
 
   const copy = (x) => JSON.parse(JSON.stringify(x));
 
-  function Encounter({ creature, level, lang, store, onResult }) {
+  function Encounter({ creature, lang, store, onResult }) {
     const T = TEXT[lang] ?? TEXT.en;
-    const player = useMemo(() => playerFrom(store.progress, stats), []);
-    const [f, setF] = useState(() => newFight(creature, level, player));
+    const player = useMemo(() => {
+      const p = playerFrom(store.progress, stats);
+      return testHook().invincible ? { ...p, hpMax: 99999 } : p; // test hook only
+    }, []);
+    const [f, setF] = useState(() => newFight(creature, player));
+    const level = creature.level;
     const [phase, setPhase] = useState("intro"); // intro | aim | exec | win | lose | fled
     const [queue, setQueue] = useState([]); // [{ part, crit }]
     const [armed, setArmed] = useState(false);
@@ -664,7 +693,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const speedNow = creatureSpeed(f.c);
     const predicted = queue.reduce((sum, q) => {
       const part = f.c.parts.find((x) => x.key === q.part);
-      return sum + Math.round(f.p.dmg * part.mult * (q.crit ? 2 : 1));
+      return sum + Math.round(f.p.dmg * part.mult * (q.crit ? 2 : 1 - f.c.absorb));
     }, 0);
 
     function add(partKey) {
@@ -733,7 +762,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
         onClick: () => add(part.key), "aria-label": `${part.label[lang]} ${hit}%`,
       },
         h("b", null, part.crippled ? "✕" : `${hit}%`),
-        h("small", null, part.label[lang]),
+        h("small", null, `${part.label[lang]} ×${(Math.round(part.mult * 10) / 10).toString()}`),
         part.max ? h("i", { className: "vats-limb" }, h("span", { style: { width: hpPct(part.hp, part.max) } })) : null,
         queued ? h("em", null, queued) : null,
         fl ? h("u", { className: "vats-dmg" }, fl.hit ? `-${fl.dmg}` : T.cMiss) : null);
@@ -771,7 +800,13 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
           h("button", { className: "link", onClick: () => onResult("abort"), "aria-label": T.close }, "✕"),
           h("span", { className: "muted" }, T.cBlocks), h("span", null)),
         header, stage,
-        h("div", { className: "vats-hp" }, bar("enemy", f.c.hp, f.c.hpMax), h("em", null, `${f.c.hp}/${f.c.hpMax}`)),
+        h("div", { className: "vats-hp" }, bar("enemy", f.c.hp, f.c.hpMax), h("em", null, `${f.c.hp}/${f.c.hpMax}${creature.derived?.includes("hp") ? "*" : ""}`)),
+        h("div", { className: "vats-stats" },
+          h("span", null, `${T.cDmg}: ${f.c.dmg}${creature.derived?.includes("dmg") ? "*" : ""}`),
+          f.c.absorb > 0 && h("span", null, `${T.cResist}: ${Math.round(f.c.absorb * 100)}%`)),
+        creature.notes?.length ? h("div", { className: "pm-fact vats-notes" }, h("strong", null, T.cWeak),
+          creature.notes.map((n, i) => h("p", { key: i }, n[lang] ?? n.en))) : null,
+        creature.derived?.some((x) => x === "hp" || x === "dmg") && h("p", { className: "muted vats-est" }, T.cEst),
         h("div", { className: "vats-choice" },
           h("button", { className: "btn primary", "data-act": "fight", onClick: () => { setPhase("aim"); say(T.cAim); } }, "⚔ ", T.cFight),
           h("button", { className: "btn", "data-act": "flee", disabled: !info.allowed, onClick: flee }, "➜ ", T.cFlee)),
@@ -806,7 +841,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const byId = useMemo(() => mapIndex(map), [map]);
     const radius = map.hit > 30 ? 130 : 105;
     const [found, setFound] = useState(() => new Set([map.start, ...(saved.discovered[mapKey] ?? [])]));
-    const frontier = useMemo(() => frontierOf(map, byId, found), [map, byId, found]);
+    const frontier = useMemo(() => frontierOf(map, byId, found, radius * 0.85), [map, byId, found, radius]);
     const [sel, setSel] = useState(null);
     const [note, setNote] = useState(null); // { kind: "found" | "failed" | "noq", ... }
     const [mission, setMission] = useState(null);
@@ -816,6 +851,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const foundTargets = map.targets.filter((id) => found.has(id)).length;
     const complete = foundTargets >= total;
     const selected = sel && frontier.find((m) => m.id === sel);
+    const recolored = Boolean(map.glyphs || map.hue || Object.keys(map.icons).length);
     // places still to discover keep their icon, in another colour
     const reveal = useMemo(() => (foundTargets >= total ? undefined
       : { undiscovered: map.targets.filter((id) => !found.has(id)).map((id) => byId.get(id)) }),
@@ -856,7 +892,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
         sound("caps");
         setFound(f); persist(f); setSel(null);
         setNote({ kind: "found", m: target });
-        setView(frame(f, frontierOf(map, byId, f)));
+        setView(frame(f, frontierOf(map, byId, f, radius * 0.85)));
       } else {
         setNote({ kind: "failed", correct, total: tot });
       }
@@ -865,11 +901,11 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
       if (typeof window !== "undefined" && !window.confirm(T.restartConfirm)) return;
       const f = new Set([map.start]);
       setFound(f); persist(f); setSel(null); setNote(null);
-      setView(frame(f, frontierOf(map, byId, f)));
+      setView(frame(f, frontierOf(map, byId, f, radius * 0.85)));
     }
 
     if (mission?.stage === "fight") {
-      return h(Encounter, { key: mission.target.id, creature: mission.creature, level: mission.level, lang, store, onResult: fightDone });
+      return h(Encounter, { key: mission.target.id, creature: mission.creature, lang, store, onResult: fightDone });
     }
     if (mission) {
       return h(Quiz, {
@@ -879,8 +915,10 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
 
     const overlay = (size) => h("g", null,
       h(Fog, { points: [...found].map((id) => byId.get(id)), radius }),
-      frontier.map((m) => h("g", { key: m.id, className: "pm-frontier" + (m.id === sel ? " on" : "") },
-        // the classic empty map marker (the Fallout wiki's "FOx map circle"): a green ring around the icon to discover
+      // Where the icons to discover are already recoloured (FO3, FNV, FO4, DLC maps) the icon itself is the marker and only
+      // the selected one gets a ring. FO76 icons are not recoloured: there every place you can travel to gets the classic
+      // empty map marker (the Fallout wiki's "FOx map circle"), a green ring.
+      frontier.filter((m) => !recolored || m.id === sel).map((m) => h("g", { key: m.id, className: "pm-frontier" + (m.id === sel ? " on" : "") },
         h("circle", {
           cx: m.x, cy: m.y, r: map.patch > 5 ? map.patch * 0.78 : size * 0.62, className: "pm-fr-box", style: { strokeWidth: size * 0.075 },
         }))),

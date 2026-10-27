@@ -18,7 +18,7 @@ const check = (cond, msg) => { if (!cond) { errors.push("FAIL: " + msg); console
 // scripted dice: every shot and every strike hits for average damage (see tools/smoke_combat.mjs for real fights)
 await page.addInitScript(() => {
   const v = [0.1, 0.5]; let i = 0;
-  window.__PM = { level: 1, fast: true, rng: () => v[i++ % 2] };
+  window.__PM = { fast: true, invincible: true, rng: () => v[i++ % 2] };
 });
 await page.goto(base);
 await page.waitForSelector(".tabs");
@@ -91,11 +91,12 @@ async function winFight() {
 async function discoverMode(key, pass) {
   await page.click('[data-mode="discover"]');
   const before = (await page.textContent(".tags")).match(/(\d+)\/(\d+)/)[1];
-  // tap a "?" marker
-  const q = page.locator(".pm-frontier").first();
-  await q.waitFor();
-  const b = await q.locator("circle").boundingBox();
-  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  // tap the icon of the undiscovered place nearest to the starting point
+  const mp = maps[key], byId = new Map(mp.markers.map((x) => [x.id, x])), start = byId.get(mp.start);
+  const done = new Set(JSON.parse((await page.evaluate(() => localStorage.getItem("wasteland-quiz-map-v1"))) ?? "{}").discovered?.[key] ?? []);
+  const t = mp.targets.map((id) => byId.get(id)).filter((x) => x.id !== mp.start && !done.has(x.id))
+    .sort((a, b) => Math.hypot(a.x - start.x, a.y - start.y) - Math.hypot(b.x - start.x, b.y - start.y))[0];
+  await tapMap(t.x, t.y);
   await page.waitForSelector(".pm-dest");
   await page.click(".pm-dest .btn.primary");
   await winFight();

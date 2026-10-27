@@ -96,3 +96,8 @@
 @keyframes vats-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 @keyframes vats-hurt{0%,100%{box-shadow:none}30%{box-shadow:inset 0 0 40px rgba(255,93,77,.6)}}
 @media (prefers-reduced-motion:reduce){.vats-zone.hit,.vats-zone.miss,.vats-pic.struck,.vats.hurt,.vats-dmg{animation:none}}
+
+.vats-stats{display:flex;gap:16px;flex-wrap:wrap;font-size:13px}
+.vats-notes{margin:0}
+.vats-notes strong{display:block}
+.vats-est{font-size:11px;margin:0}

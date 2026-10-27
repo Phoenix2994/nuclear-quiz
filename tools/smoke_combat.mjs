@@ -5,6 +5,8 @@ import { chromium } from "playwright";
 
 const base = process.argv[2] ?? "http://localhost:8000";
 const questions = JSON.parse(readFileSync(new URL("../data/questions-en.json", import.meta.url), "utf8"));
+const maps = JSON.parse(readFileSync(new URL("../data/maps.json", import.meta.url), "utf8"));
+const KEY = { FO3: "fo3", FNV: "fnv", FO4: "fo4", 76: "fo76" };
 const browser = await chromium.launch();
 const errors = [];
 const check = (cond, msg) => { console.log(cond ? "  ok  " : "  FAIL", msg); if (!cond) errors.push(msg); };
@@ -15,24 +17,29 @@ async function open(scenario) {
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.addInitScript((s) => {
     const v = s.dice; let i = 0;
-    window.__PM = { creature: s.creature, level: s.level, fast: true, rng: () => v[i++ % v.length] };
+    window.__PM = { creature: s.creature, fast: true, rng: () => v[i++ % v.length] };
   }, scenario);
   await page.goto(base);
   await page.waitForSelector(".tabs");
   await page.click('.tabs button:has-text("MAP")');
   await page.click(`.chips button:text-is("${scenario.chip}")`);
   await page.click('[data-mode="discover"]');
-  const q = page.locator(".pm-frontier").first();
-  await q.waitFor();
-  const b = await q.locator("circle").boundingBox();
-  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  // tap the icon of the undiscovered place nearest to the starting vault
+  const m = maps[KEY[scenario.chip]], byId = new Map(m.markers.map((x) => [x.id, x])), start = byId.get(m.start);
+  const t = m.targets.map((id) => byId.get(id)).filter((x) => x.id !== m.start)
+    .sort((a, b) => Math.hypot(a.x - start.x, a.y - start.y) - Math.hypot(b.x - start.x, b.y - start.y))[0];
+  const svg = page.locator(".pm-svg").first();
+  await svg.waitFor();
+  const box = await svg.boundingBox(), vb = (await svg.getAttribute("viewBox")).split(" ").map(Number);
+  await page.mouse.click(box.x + ((t.x - vb[0]) / vb[2]) * box.width, box.y + ((t.y - vb[1]) / vb[3]) * box.height);
   await page.waitForSelector(".pm-dest");
   await page.click(".pm-dest .btn.primary");
   await page.waitForSelector(".vats");
   return page;
 }
 const hp = async (page, sel) => (await page.locator(sel).first().textContent()).trim();
-const zone = (page, name) => page.locator(`.vats-zone:has(small:text-is("${name}"))`);
+const ZONE = { head: 0, body: 1 }; // the first zone of every body is the head, the second the torso / body
+const zone = (page, name) => page.locator(".vats-zone").nth(ZONE[name]);
 async function quiz(page) { // answer the 3 mission questions correctly
   for (let i = 0; i < 3; i++) {
     await page.waitForSelector(".question");
@@ -50,13 +57,14 @@ async function quiz(page) { // answer the 3 mission questions correctly
 }
 const discovered = async (page) => +(await page.textContent(".tags")).match(/(\d+)\/\d+/)[1];
 
-console.log("A. ONE SHOT IS ENOUGH: level-1 radroach (18 HP), head shot for 18, then the quiz");
+console.log("A. ONE SHOT IS ENOUGH: the Fallout 3 radroach has 5 HP on its wiki page, one head shot kills it, then the quiz");
 {
-  const page = await open({ creature: "Radroach", level: 1, chip: "FO3", dice: [0.3, 0.5] });
-  check((await hp(page, ".vats-hp em")) === "18/18", "intro shows the creature at 18/18");
+  const page = await open({ creature: "Radroach", chip: "FO3", dice: [0.3, 0.5] });
+  check((await hp(page, ".vats-hp em")).startsWith("5/5"), "intro shows the creature at 5/5");
+  check((await page.locator(".vats-notes, .vats-stats").count()) > 0, "intro shows the creature stats");
   check(await page.locator('[data-act="flee"]').isDisabled(), "cannot flee a creature as fast as you (speed 5 vs 4)");
   await page.click('[data-act="fight"]');
-  await zone(page, "Head").click();
+  await zone(page, "head").click();
   check((await page.locator(".vats-pips i.used").count()) === 1, "one shot queued, one pip spent");
   await page.click('[data-act="exec"]');
   await page.waitForSelector(".feedback.ok");
@@ -68,12 +76,12 @@ console.log("A. ONE SHOT IS ENOUGH: level-1 radroach (18 HP), head shot for 18, 
   await page.close();
 }
 
-console.log("B. ONE SHOT IS NOT ENOUGH: level-3 feral ghoul (38 HP, torso shots of 9), it hits back, second round");
+console.log("B. ONE SHOT IS NOT ENOUGH: Fallout 4 feral ghoul (35 HP, 9% armour, hits for 15): torso shots of 8, it hits back, second round");
 {
-  const page = await open({ creature: "Feral ghoul", level: 3, chip: "FO4", dice: [0.2, 0.5] });
+  const page = await open({ creature: "Feral ghoul", chip: "FO4", dice: [0.2, 0.5] });
   await page.click('[data-act="fight"]');
-  check((await hp(page, ".vats-hp em")) === "38/38", "ghoul starts at 38/38");
-  for (let i = 0; i < 3; i++) await zone(page, "Torso").click();
+  check((await hp(page, ".vats-hp em")) === "35/35", "ghoul starts at 35/35");
+  for (let i = 0; i < 3; i++) await zone(page, "body").click();
   check((await page.locator(".vats-pips i.used").count()) === 3, "three shots queued");
   await page.click('[data-act="exec"]');
   await page.waitForSelector('.vats-log p:has-text("attacks")');
@@ -81,10 +89,10 @@ console.log("B. ONE SHOT IS NOT ENOUGH: level-3 feral ghoul (38 HP, torso shots 
   const afterRound1 = await hp(page, ".vats-hp em");
   const mine = await hp(page, ".vats-me em");
   console.log("     after round 1: creature", afterRound1, "| me", mine);
-  check(afterRound1 === "11/38", "27 damage was not enough: creature at 11/38");
-  check(mine === "44/53", "the ghoul hit back for 9: me at 44/53");
+  check(afterRound1 === "11/35", "24 damage was not enough: creature at 11/35");
+  check(mine === "38/53", "the ghoul hit back for 15: me at 38/53");
   check((await page.locator(".vats-pips i.free").count()) === 4, "action points refilled for round 2");
-  await zone(page, "Torso").click(); await zone(page, "Torso").click();
+  await zone(page, "body").click(); await zone(page, "body").click();
   await page.click('[data-act="exec"]');
   await page.waitForSelector(".feedback.ok", { timeout: 15000 });
   check((await page.textContent(".feedback strong")).includes("DEFEATED"), "victory in round 2");
@@ -97,20 +105,20 @@ console.log("B. ONE SHOT IS NOT ENOUGH: level-3 feral ghoul (38 HP, torso shots 
 console.log("C. A MISS then a CRIPPLED head: it takes more shots, the creature misses more once blinded");
 {
   // hit rolls: 0.99 (miss) then 0.1 (hit); damage roll 0.5
-  const page = await open({ creature: "Super mutant", level: 6, chip: "FNV", dice: [0.99, 0.5, 0.1, 0.5, 0.1, 0.5, 0.1, 0.5] });
+  const page = await open({ creature: "Super mutant", chip: "FNV", dice: [0.99, 0.5, 0.1, 0.5, 0.1, 0.5, 0.1, 0.5] });
   await page.click('[data-act="fight"]');
-  await zone(page, "Head").click();
+  await zone(page, "head").click();
   await page.click('[data-act="exec"]');
   await page.waitForSelector('.vats-log p:has-text("MISS")');
   check(true, "the first shot is a miss");
   await page.waitForFunction(() => document.querySelector('.vats-zone:not([disabled])'), null, { timeout: 15000 });
-  check((await hp(page, ".vats-hp em")).startsWith("68/"), "a miss does no damage (creature still at 68)");
+  check((await hp(page, ".vats-hp em")).startsWith("100/"), "a miss does no damage (creature still at 100)");
   await page.close();
 }
 
 console.log("D. FLEE: a slow brahmin (speed 3) can be outrun");
 {
-  const page = await open({ creature: "Brahmin", level: 2, chip: "FO3", dice: [0.2, 0.5] });
+  const page = await open({ creature: "Brahmin", chip: "FO3", dice: [0.2, 0.5] });
   check(!(await page.locator('[data-act="flee"]').isDisabled()), "flee is allowed against a slower creature");
   await page.click('[data-act="flee"]');
   await page.waitForSelector(".feedback.ok");
@@ -121,11 +129,11 @@ console.log("D. FLEE: a slow brahmin (speed 3) can be outrun");
   await page.close();
 }
 
-console.log("E. DEFEAT: a level-12 deathclaw kills a rookie");
+console.log("E. DEFEAT: the New Vegas deathclaw (level 20, 500 HP) hits for 125 and kills a rookie");
 {
-  const page = await open({ creature: "Deathclaw", level: 12, chip: "FNV", dice: [0.0, 0.5] });
+  const page = await open({ creature: "Deathclaw", chip: "FNV", dice: [0.0, 0.5] });
   await page.click('[data-act="fight"]');
-  await zone(page, "Body").click();
+  await zone(page, "body").click();
   await page.click('[data-act="exec"]');
   await page.waitForSelector(".feedback.ko", { timeout: 15000 });
   check((await page.textContent(".feedback strong")).includes("DEFEATED"), "defeated");
