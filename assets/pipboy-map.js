@@ -183,7 +183,7 @@ export const BODIES = {
     Z("legs", "Tentacoli", "Tentacles", 60, 0.8, 0.35, "slow", [0.1, 0.65, 0.8, 0.35])],
 };
 // a wide "humanoid" picture (a crouching deathclaw) is laid out like a four-legged beast
-export const bodyOf = (c) => (c.body === "humanoid" && c.w / c.h > 1.2 ? "beast" : c.body in BODIES ? c.body : "humanoid");
+export const bodyOf = (c) => (c.body in BODIES ? c.body : "humanoid"); // data/creatures.json already holds the template that fits the picture
 
 export function playerFrom(progress, stats) {
   const lvl = stats?.level(progress) ?? 1, sp = (k) => stats?.special(progress, k) ?? 1;
@@ -194,8 +194,10 @@ export function playerFrom(progress, stats) {
 // sends the creature into a frenzy
 const ANTENNAE = { arthropod: [0, 0, 0.35, 0.2], flyer: [0.3, 0, 0.4, 0.1] };
 export function zonesFor(creature) {
-  const body = bodyOf(creature), zones = BODIES[body].slice();
-  if (creature.antennae && ANTENNAE[body]) zones.push(Z("antennae", "Antenne", "Antennae", 35, 0.5, 0.2, "frenzy", ANTENNAE[body]));
+  const body = bodyOf(creature);
+  // the rectangles fitted to this creature's silhouette (tools/build_creatures.py) replace the template ones
+  const zones = BODIES[body].map((z) => (creature.zones?.[z.key] ? { ...z, box: creature.zones[z.key] } : z));
+  if (creature.antennae && ANTENNAE[body]) zones.push(Z("antennae", "Antenne", "Antennae", 35, 0.5, 0.2, "frenzy", creature.zones?.antennae ?? ANTENNAE[body]));
   return zones;
 }
 // weak points / resistances (final damage multipliers, backed by a wiki sentence) are stored by role: head, torso, arms, legs
@@ -271,6 +273,7 @@ export const tryFlee = (f, rnd) => rnd() * 100 < fleeInfo(f).chance;
 export function pickCreature(pool, discovered, rnd = Math.random, forced = {}) {
   const mapLevel = 1 + Math.floor(discovered / 3);
   const forcedCreature = forced.creature && pool.find((c) => c.name === forced.creature);
+  pool = pool.filter((c) => !c.pending); // creatures whose weak points are not known yet never show up
   const eligible = pool.filter((c) => c.level <= mapLevel + 3);
   const recent = eligible.filter((c) => c.level >= mapLevel - 6); // no radroaches once the map is well explored
   const list = recent.length ? recent : eligible.length ? eligible : [...pool].sort((a, b) => a.level - b.level).slice(0, 3);
@@ -876,7 +879,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     function travel() {
       const qs = pickMissionQuestions(store, map);
       if (!qs.length) { setNote({ kind: "noq" }); return; }
-      const pool = creatures?.[map.group];
+      const pool = creatures?.[map.group]?.filter((c) => !c.pending);
       if (!pool?.length) { setMission({ stage: "quiz", target: selected, qs }); return; } // no creature data: quiz only
       setMission({ stage: "fight", target: selected, qs, ...pickCreature(pool, foundTargets, rng, testHook()) });
     }

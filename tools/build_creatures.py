@@ -173,6 +173,45 @@ def fo76_spots(cache):
     return out
 
 
+def body_templates():
+    """The zone rectangles per body type, read from BODIES in assets/pipboy-map.js (single source of truth)."""
+    js = open(os.path.join(ROOT, "assets/pipboy-map.js")).read()
+    block = re.search(r"export const BODIES = \{(.*?)\n\};", js, re.S).group(1)
+    out = {}
+    for name, part in re.findall(r"(\w+): \[(.*?)\],?\n(?=  \w+:|$)", block + "\n", re.S):
+        out[name] = {k: [float(v) for v in b.split(",")]
+                     for k, b in re.findall(r'Z\("(\w+)", "[^"]*", "[^"]*", [\d.]+, [\d.]+, [\d.]+, (?:null|"\w+"), \[([\d., ]+)\]\)', part)}
+    return out
+
+
+def fit_zones(im, body, templates, mirror=None):
+    """Fit the zone rectangles of a body type to this creature's silhouette: each template rectangle is shrunk to the opaque
+    pixels it contains, and four-legged beasts are mirrored when they face right (the head is where the top of the silhouette is)."""
+    import numpy as np
+    mask = np.asarray(im.getchannel("A")) > 40
+    h, w = mask.shape
+    tpl = {k: list(v) for k, v in templates[body].items()}
+    if mirror is None and body == "beast":
+        rows = np.where(mask.any(axis=1))[0]
+        top = mask[rows[0]:rows[0] + max(2, int(0.12 * len(rows)))]
+        mirror = np.where(top.any(axis=0))[0].mean() > 0.55 * w  # the highest part (head, ears, horns) is on the right: it faces right
+    if mirror:
+        tpl = {k: [round(1 - x - bw, 3), y, bw, bh] for k, (x, y, bw, bh) in tpl.items()}
+    out = {}
+    for key, (x, y, bw, bh) in tpl.items():
+        x0, y0, x1, y1 = int(x * w), int(y * h), int((x + bw) * w), int((y + bh) * h)
+        sub = mask[y0:y1, x0:x1]
+        if sub.size == 0 or sub.mean() < 0.06:
+            out[key] = [x, y, bw, bh]
+            continue
+        ys, xs = np.where(sub)
+        pad = 0.015
+        nx, ny = max(0.0, (x0 + xs.min()) / w - pad), max(0.0, (y0 + ys.min()) / h - pad)
+        nw, nh = min(1.0 - nx, (xs.max() - xs.min() + 1) / w + 2 * pad), min(1.0 - ny, (ys.max() - ys.min() + 1) / h + 2 * pad)
+        out[key] = [round(nx, 3), round(ny, 3), round(nw, 3), round(nh, 3)]
+    return out
+
+
 def absorb_of(game, dr, dt):
     """Share of the damage the creature's armour absorbs, from the wiki figures: damage resistance (a percentage in
     FO3/FNV, a rating in FO4/FO76) and the damage threshold (FNV)."""
@@ -190,6 +229,9 @@ def main():
     src = os.path.join(ROOT, "tools/sources")
     weakpoints = json.load(open(os.path.join(src, "creature-weakpoints.json"))) if os.path.exists(os.path.join(src, "creature-weakpoints.json")) else {}
     spots76 = fo76_spots(cache)
+    templates = body_templates()
+    zp = os.path.join(src, "creature-zones.json")
+    zone_overrides = json.load(open(zp)) if os.path.exists(zp) else {}
     notes_it = json.load(open(os.path.join(src, "creature-notes-it.json"))) if os.path.exists(os.path.join(src, "creature-notes-it.json")) else {}
 
     pages_path = os.path.join(cache, "creature-pages.json")
@@ -286,6 +328,10 @@ def main():
                 derived.append("hp")
             if not dmg:
                 derived.append("dmg")
+            ov = zone_overrides.get(t, {})  # body type / facing set by looking at the picture (tools/sources/creature-zones.json)
+            zbody = ov.get("body") or (body if (body != "humanoid" or im.width / im.height <= 1.2) else "beast")
+            zones = fit_zones(im, zbody, templates, ov.get("mirror"))
+            rec_body = zbody
             wp = dict(weakpoints.get(t, {}))
             sp = spots76.get(FO76_NAMES.get(name, name)) if g == "fo76" else None
             if not sp and g != "fo76":  # same species in Fallout 76: by analogy, flagged as an estimate; this game's own data wins
@@ -300,18 +346,26 @@ def main():
             if sp:  # the game's own figures beat anything hand-written
                 wp["mult"] = {r: m for r, (m, _) in sp.items()}
                 wp["because"] = "Fallout 76 wiki table of body part multipliers: " + ", ".join(f"{lab} x{m:g}" for _, (m, lab) in sp.items())
-            rec = {"id": cid, "name": name, "page": t, "img": dst, "w": im.width, "h": im.height, "level": level, "speed": speed, "body": body,
+            rec = {"id": cid, "name": name, "page": t, "img": dst, "w": im.width, "h": im.height, "level": level, "speed": speed, "body": rec_body,
                    "hp": hp, "dmg": dmg, "absorb": wp.get("absorb", absorb_of(g, dr, dt)), "dr": dr, "dt": dt,
-                   "antennae": bool(re.search(r"(?i)antennae.{0,80}crippl\w*.{0,80}fren|crippl\w*.{0,60}antennae.{0,80}fren", text.replace("\n", " "))),
+                   "zones": zones, "antennae": bool(re.search(r"(?i)antennae.{0,80}crippl\w*.{0,80}fren|crippl\w*.{0,60}antennae.{0,80}fren", text.replace("\n", " "))),
                    "weak": wp.get("mult", {}), "weakAcc": wp.get("acc", {}), "because": wp.get("because", ""),
                    "notes": [{"en": n, **({"it": notes_it[n]} if n in notes_it else {})} for n in (notes_of(text) if not wp.get("notes") else wp["notes"])],
                    "derived": derived}
+            rec["pending"] = not rec["weak"]  # no known weak points: left out of the fights until someone finds them
             out[g].append({k: v for k, v in rec.items() if v not in (None, [], {}, "", False)})
             for key, label in (("body", "body_default"), ("level", "level_derived"), ("hp", "no_hp")):
                 if key in derived:
                     report[label].append(f"{g}:{name}")
     json.dump(out, open(os.path.join(ROOT, "data/creatures.json"), "w"), ensure_ascii=False, separators=(",", ":"))
     print({g: len(v) for g, v in out.items()})
+    todo = {g: [c["page"] for c in v if c.get("pending")] for g, v in out.items()}
+    with open(os.path.join(src, "creatures-without-weakpoints.txt"), "w") as fh:
+        fh.write("Creatures with no known weak points (no wiki figure for the game, no Fallout 76 analogue): left out of the fights.\n"
+                 "Add them to tools/sources/creature-weakpoints.json (role -> damage multiplier: head, torso, arms, legs) and rebuild.\n\n")
+        for g, pages in todo.items():
+            fh.write(f"{CATEGORIES[g]} ({len(pages)}):\n" + "".join(f"  - {x}\n" for x in pages) + "\n")
+    print("pending (not shown in the fights):", {g: len(v) for g, v in todo.items()})
     print("body not stated by the wiki (default humanoid):", report["body_default"])
     print("level not in the wiki table (fallback):", report["level_derived"])
     print("no health in the wiki table (formula):", report["no_hp"])

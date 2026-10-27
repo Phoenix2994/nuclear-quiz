@@ -143,7 +143,15 @@ deathclaw (125 damage) kills a level-1 player in one strike: levels come from th
 creatures of the right tier. Player stats come from the app (`stats.level`, `stats.special`: `ts(xp).level` and
 `ns(progress, key)` in the bundle). Win -> quiz (3 of 3 correct), lose or flee -> back to the map.
 
-Zone rectangles are per body template (`BODIES`), not per picture: on some creatures they only roughly match the drawing.
+Zone rectangles: the body template (`BODIES`) gives the layout, then `fit_zones` in `tools/build_creatures.py` shrinks every
+rectangle to the creature's own silhouette (opaque pixels of its picture) and mirrors four-legged beasts that face right; the result
+is stored per creature in `data/creatures.json` (`zones`). Where the automatic choice looks wrong, `tools/sources/creature-zones.json`
+sets the template (`body`) or the facing (`mirror`) by page title, after looking at the picture. They are still approximations: the
+real positions are in the game's body part data (see above).
+
+Creatures with no known weak points (no wiki figure for their game, no Fallout 76 analogue) are flagged `pending` in `data/creatures.json`
+and never appear in the fights; the list is written to `tools/sources/creatures-without-weakpoints.txt`. Add their weak points to
+`tools/sources/creature-weakpoints.json` and rebuild, and they appear.
 Test hook (used by the smoke tests): `window.__PM = { rng, creature, level, fast, invincible }`; not set in production.
 
 ## How the quiz works
