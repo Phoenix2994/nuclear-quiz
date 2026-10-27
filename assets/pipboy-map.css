@@ -50,7 +50,7 @@
 .vats-stage{display:flex;justify-content:center;border:1px solid var(--fg-dim);border-radius:4px;background:radial-gradient(ellipse at center,#06200c 0%,#020a04 80%);padding:8px;overflow:hidden}
 .vats-pic{position:relative;width:min(100%,calc(40vh * var(--ar)));aspect-ratio:var(--ar);min-width:150px}
 .vats-pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;user-select:none;pointer-events:none;
-  filter:grayscale(1) sepia(1) hue-rotate(55deg) saturate(3) brightness(.85) contrast(1.1);opacity:.9}
+}
 .vats-pic.struck{animation:vats-shake .35s}
 .vats-zone{position:absolute;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:0;padding:2px 4px;overflow:visible;
   border:1.5px solid var(--fg);background:rgba(77,255,106,.1);color:var(--fg);font:inherit;cursor:pointer;border-radius:3px;text-shadow:0 0 4px rgba(77,255,106,.7);
@@ -101,3 +101,5 @@
 .vats-notes{margin:0}
 .vats-notes strong{display:block}
 .vats-est{font-size:11px;margin:0}
+.pm-info{display:flex;flex-direction:column;gap:8px}
+.pm-desc{margin:0;font-size:14px;line-height:1.4}

@@ -16,6 +16,8 @@ dropping the bundle patch.
 | `tools/build_maps.py` | Regenerates the two rows above from the Fallout Wiki | Keep in repo (`python3 tools/build_maps.py`, needs `curl`, Pillow and `opencv-python-headless`) |
 | `tools/sources/*.jpg` | In-game Pip-Boy maps with icons for FO3 and FNV (input of the build script) | Keep with the tool |
 | `data/place-facts.json` | One curiosity (EN + IT) per place that has one: 105 places (generated) | Copy to static/public |
+| `data/place-descriptions.json` | A description (EN + IT) per place: the opening of its wiki page, 337 places (generated) | Copy to static/public |
+| `tools/build_descriptions.py` | Builds it: English from the wiki page, Italian from the Italian wiki page linked by the interlanguage link (125 places) or from `tools/sources/place-descriptions-it.json` (213 hand-written translations); openings that only say "X is a location in Y" are dropped | Keep in repo |
 | `tools/build_facts.py` | Builds it from the wiki's "Behind the scenes" bullets (filtered) and `tools/sources/place-facts-it.json` (hand-written Italian translations) | Keep in repo |
 | `data/creatures.json`, `img/creatures/*.webp` | 93 creatures (FO3 17, FNV 26, FO4 18, FO76 32) with transparent image and the wiki figures, body type, weak points (generated) | Copy to static/public |
 | `tools/build_creatures.py` | Builds them from the wiki creature pages; `tools/sources/creature-weakpoints.json` and `creature-notes-it.json` are its hand-curated inputs | Keep in repo (needs Pillow) |
@@ -81,6 +83,8 @@ Where the icons are recoloured the recoloured icon is itself the "to discover" m
 (An earlier approach that wiped the icons with inpainting was dropped: it smudged the maps.)
 
 Categories that are a place's own name (Diamond City, Castle…) are never shown as a hint (`isGeneric`).
+
+The description of a place (and its curiosity, when it has one) is shown on discovery, in the explorer and in the answer boxes (`Fact` component). Creature pictures keep their original colours.
 
 Own persistence: discovered places and best scores live in `localStorage` key `wasteland-quiz-map-v1`, outside the app
 store (the app's "reset progress" does not clear it). In the real sources move them into the store/progress object.

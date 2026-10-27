@@ -461,11 +461,15 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     }, clean(target.name));
   }
 
-  // a curiosity about the place, when the wiki has one (data/place-facts.json, keyed by the place's wiki page)
-  function Fact({ facts, place, lang, T }) {
-    const f = facts?.[place.page];
-    const text = f && (f[lang] ?? f.en);
-    return text ? h("div", { className: "pm-fact" }, h("strong", null, T.fact), h("p", null, text)) : null;
+  // what we know about a place: its description (the opening of its wiki page, data/place-descriptions.json) and, when the
+  // wiki has one, a curiosity (data/place-facts.json). `info` = { d: descriptions, f: curiosities }, both keyed by wiki page.
+  function Fact({ facts: info, place, lang, T }) {
+    const d = info?.d?.[place.page], f = info?.f?.[place.page];
+    const desc = d && (d[lang] ?? d.en ?? d.it), text = f && (f[lang] ?? f.en);
+    if (!desc && !text) return null;
+    return h("div", { className: "pm-info" },
+      desc ? h("p", { className: "pm-desc" }, desc) : null,
+      text ? h("div", { className: "pm-fact" }, h("strong", null, T.fact), h("p", null, text)) : null);
   }
 
   const pseudoQuestion = (map, id) => ({ id: "map:" + id, kind: "map", tipo: "luogo", livello: 2, giochi: [map.group] });
@@ -1000,6 +1004,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
   const loadData = () => (dataPromise ??= Promise.all([
     json("./data/maps.json"),
     json("./data/place-facts.json").catch(() => ({})), // curiosities are optional
+    json("./data/place-descriptions.json").catch(() => ({})), // so are the descriptions
     json("./data/creatures.json").catch(() => ({})), // without creatures the discovery missions are quiz only
   ]).catch((e) => { dataPromise = null; throw e; }));
 
@@ -1008,7 +1013,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const { lang } = useI18n();
     const T = TEXT[lang] ?? TEXT.en;
     const [maps, setMaps] = useState(null);
-    const [facts, setFacts] = useState({});
+    const [facts, setFacts] = useState({ d: {}, f: {} });
     const [creatures, setCreatures] = useState({});
     const [failed, setFailed] = useState(false);
     const [game, setGame] = useState("fo4");
@@ -1016,7 +1021,7 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz, stats }) {
     const [previewView, setPreviewView] = useState(null);
     const [saved, setSaved] = useState(loadSaved);
 
-    useEffect(() => { loadData().then(([m, f, c]) => { setMaps(m); setFacts(f); setCreatures(c); }).catch(() => setFailed(true)); }, []);
+    useEffect(() => { loadData().then(([m, f, d, c]) => { setMaps(m); setFacts({ f, d }); setCreatures(c); }).catch(() => setFailed(true)); }, []);
     const map = maps && maps[game];
     useEffect(() => { if (map) setPreviewView(bboxView(map.bbox)); }, [game, maps]);
     const areas = map ? Object.keys(maps).filter((k) => maps[k].group === map.group) : [];
