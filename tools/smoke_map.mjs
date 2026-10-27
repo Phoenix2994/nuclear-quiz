@@ -87,7 +87,8 @@ async function discoverMode(key, pass) {
     const right = q && q.options[q.answer];
     const opts = page.locator(".option");
     let idx = 0;
-    if (q) for (let k = 0; k < (await opts.count()); k++) if ((await opts.nth(k).textContent()).includes(right)) idx = k;
+    // exact match on the option text (it is prefixed by the letter A-D)
+    if (q) for (let k = 0; k < (await opts.count()); k++) if ((await opts.nth(k).textContent()).replace(/^[A-D]/, "").trim() === right.trim()) idx = k;
     if (!pass) idx = (idx + 1) % (await opts.count()); // wrong on purpose
     await opts.nth(idx).click();
     await page.waitForSelector(".feedback");
