@@ -146,26 +146,35 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
 
   // ---- map layers
 
-  // The map image, its icons and, in the discovery mode, only the icons of the places already discovered.
-  // `reveal` = { shown: Set of marker ids whose icon is visible }.
-  //  - maps with a "clean" twin (icons wiped out): draw the clean map, then restore the original in a square around shown markers
-  //  - FO76 (painted pictograms, cannot be wiped, and left visible on purpose): `reveal` is not used
-  //  - the tinted DLC maps have no baked icons: only the glyphs of the shown markers are drawn
+  // The map image and its icons. In the discovery mode `reveal` = { undiscovered: markers still to discover }: their
+  // icons are drawn again in another colour (the map itself is never altered).
+  //  - FO4 has its icons baked in: a transparent "glyphs" layer (flat colour, built from the icon pixels) is drawn over
+  //    the map, clipped to a square around each undiscovered marker
+  //  - FO3 / FNV icons are filled plates: a copy of the map with its hue rotated, clipped to a square around the marker
+  //  - the tinted DLC maps draw category glyphs: undiscovered markers use the recoloured set
+  //  - FO76 is left as it is
   const Layers = React.memo(function Layers({ map, size, reveal }) {
     const icons = map.icons;
     const glyphs = Object.keys(icons).length > 0;
-    const restore = reveal && map.clean;
+    const todo = reveal ? new Set(reveal.undiscovered.map((m) => m.id)) : null;
     return h("g", null,
-      h("image", { href: restore ? map.clean : map.image, x: 0, y: 0, width: SIZE, height: SIZE, className: "pm-bg" }),
-      restore && h("g", null,
-        h("defs", null, h("clipPath", { id: "pm-restore" },
-          map.markers.filter((m) => reveal.shown.has(m.id)).map((m) => h("rect", { key: m.id, x: m.x - map.patch * 0.95, y: m.y - map.patch * 0.95, width: map.patch * 1.9, height: map.patch * 1.9 })))),
-        h("image", { href: map.image, x: 0, y: 0, width: SIZE, height: SIZE, className: "pm-bg", clipPath: "url(#pm-restore)" })),
-      // the tinted DLC maps carry no icons: draw the category glyphs
-      glyphs && h("g", { className: "pm-icons" }, map.markers.map((m) =>
-        icons[m.c] && (!reveal || reveal.shown.has(m.id)) && h("image", {
-          key: m.id, href: icons[m.c], x: m.x - size / 2, y: m.y - size / 2, width: size, height: size,
-        }))));
+      h("image", { href: map.image, x: 0, y: 0, width: SIZE, height: SIZE, className: "pm-bg" }),
+      reveal && map.glyphs && h("g", null,
+        h("defs", null, h("clipPath", { id: "pm-todo" }, reveal.undiscovered.map((m) => h("rect", {
+          key: m.id, x: m.x - map.patch * 0.95, y: m.y - map.patch * 0.95, width: map.patch * 1.9, height: map.patch * 1.9,
+        })))),
+        h("image", { href: map.glyphs, x: 0, y: 0, width: SIZE, height: SIZE, clipPath: "url(#pm-todo)" })),
+      reveal && map.hue && h("g", null,
+        h("defs", null,
+          h("filter", { id: "pm-hue" }, h("feColorMatrix", { type: "hueRotate", values: String(map.hue[0]) })),
+          h("clipPath", { id: "pm-todo-hue" }, reveal.undiscovered.map((m) => h("rect", {
+            key: m.id, x: m.x - map.hue[1], y: m.y - map.hue[1], width: map.hue[1] * 2, height: map.hue[1] * 2,
+          })))),
+        h("image", { href: map.image, x: 0, y: 0, width: SIZE, height: SIZE, filter: "url(#pm-hue)", clipPath: "url(#pm-todo-hue)" })),
+      glyphs && h("g", { className: "pm-icons" }, map.markers.map((m) => {
+        const src = todo?.has(m.id) ? map.icons_undisc[m.c] : icons[m.c];
+        return src && h("image", { key: m.id, href: src, x: m.x - size / 2, y: m.y - size / 2, width: size, height: size });
+      })));
   });
 
   // Fog of war: everything but the discovered surroundings is darkened. Black, partly transparent discs on a white
@@ -506,17 +515,10 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     const foundTargets = map.targets.filter((id) => found.has(id)).length;
     const complete = foundTargets >= total;
     const selected = sel && frontier.find((m) => m.id === sel);
-    // icons visible: discovered places, plus the minor markers near them; the undiscovered targets stay covered
-    const reveal = useMemo(() => {
-      if (foundTargets >= total || !map.clean && !Object.keys(map.icons).length) return undefined; // FO76: icons stay visible
-      const reached = [...found].map((id) => byId.get(id)).filter(Boolean);
-      const isTarget = new Set(map.targets);
-      const shown = new Set(found);
-      map.markers.forEach((m) => {
-        if (!isTarget.has(m.id) && reached.some((r) => dist(r, m) <= radius * 0.8)) shown.add(m.id);
-      });
-      return { shown };
-    }, [map, byId, found, radius, foundTargets, total]);
+    // places still to discover keep their icon, in another colour
+    const reveal = useMemo(() => (foundTargets >= total ? undefined
+      : { undiscovered: map.targets.filter((id) => !found.has(id)).map((id) => byId.get(id)) }),
+    [map, byId, found, foundTargets, total]);
 
     function persist(f) {
       setSaved((s) => {
@@ -563,8 +565,10 @@ export function createMapTab({ React, useStore, useI18n, sound, Quiz }) {
     const overlay = (size) => h("g", null,
       h(Fog, { points: [...found].map((id) => byId.get(id)), radius }),
       frontier.map((m) => h("g", { key: m.id, className: "pm-frontier" + (m.id === sel ? " on" : "") },
-        // the classic empty map marker (the Fallout wiki's "FOx map circle"): a green ring with a faint fill
-        h("circle", { cx: m.x, cy: m.y, r: size * 0.46, className: "pm-fr-box", style: { strokeWidth: size * 0.075 } }))),
+        // the classic empty map marker (the Fallout wiki's "FOx map circle"): a green ring around the icon to discover
+        h("circle", {
+          cx: m.x, cy: m.y, r: map.patch > 5 ? map.patch * 0.78 : size * 0.62, className: "pm-fr-box", style: { strokeWidth: size * 0.075 },
+        }))),
       note?.kind === "found" && h("g", { className: "pm-result" },
         h("circle", { cx: note.m.x, cy: note.m.y, r: size * 0.8, className: "pm-pulse" }),
         h(Label, { target: note.m, map: { hit: size * 0.9 }, view })));

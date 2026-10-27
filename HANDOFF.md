@@ -64,13 +64,16 @@ Perception (S.P.E.C.I.A.L.) point work like any other quiz. `store.completeSessi
 | Explorer | Browse freely; tap an icon for name, type and wiki link; highlight a category. |
 | Which icon is this? | A zoomed icon is circled, pick the kind of place (only generic categories, never a place's own name). Not offered for FO76 (its icons are pictures, not glyphs). |
 
-The icons of undiscovered places are hidden (`Layers` / `reveal` in the module):
-- FO3, FNV, FO4: the maps have the icons baked in, so the build script also writes `img/maps/<map>-clean.webp`
-  (icons inpainted away: only the bright glyph pixels around each marker, `make_clean`). The mode draws the clean map and
-  restores the original image in a square around the discovered places (`patch` in `data/maps.json`) and the minor markers near them.
-- FO76: its icons are painted pictograms that cannot be inpainted, and the owner chose to leave them visible: only the fog applies there.
-- DLC maps: no baked icons, only the glyphs of the revealed markers are drawn.
-Some baked icons without a wiki marker (or a bit off) can stay visible on the clean maps.
+Icons of places still to discover stay visible but in another colour (`Layers` / `reveal` in the module); the map image
+itself is never altered:
+- FO4: `img/maps/fo4-glyphs.webp`, a transparent layer holding only the baked glyph pixels in amber (`make_glyphs`, needs
+  `opencv-python-headless`), drawn over the map and clipped to a square around each undiscovered marker.
+- FO3 (green -> amber) and FNV (amber -> cyan): the icons are filled plates, so a copy of the map with its hue rotated
+  (`HUE_TINT` in the build script, `hue` in `data/maps.json`) is drawn clipped to a square around each marker.
+- DLC maps: the glyph overlay switches to a recoloured set (`icons_undisc`).
+- FO76: left as it is (fog only), on purpose.
+The 4 nearest undiscovered places also get the green empty-circle marker; discovered icons keep the map's own colour.
+(An earlier approach that wiped the icons with inpainting was dropped: it smudged the maps.)
 
 Categories that are a place's own name (Diamond City, Castle…) are never shown as a hint (`isGeneric`).
 

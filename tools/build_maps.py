@@ -32,10 +32,14 @@ BAKED = {
     "fo3": {"file": "tools/sources/fo3-pipboy-map.jpg", "size": (1160, 1160), "align": (1.0, 1.016, -7.8, 2.6), "min_lum": 90},
     "fnv": {"file": "tools/sources/fnv-pipboy-map.jpg", "size": None, "align": (1.0, 1.004, -1.0, -5.9), "min_lum": 150},
 }
-# Radius (map units) of the area wiped around each marker to build the icon-free "clean" map used by the
-# discovery mode. It must cover the baked-in icon even if the marker is a few pixels off.
+# Discovery mode: icons of places still to discover are drawn again in another colour on top of the (untouched) map.
+# ICON_RADIUS (map units) is the area around a marker that contains its baked-in icon even if the marker is a few
+# pixels off; GLYPH_CONTRAST how much brighter than its surroundings a baked glyph pixel is.
 ICON_RADIUS = {"fo3": 16, "fnv": 15, "fo4": 15, "fo76": 24}
-GLYPH_CONTRAST = {"fo3": 18, "fnv": 40, "fo4": 40}  # how much brighter than its surroundings a baked glyph pixel is
+GLYPH_CONTRAST = {"fo4": 40}  # FO4 glyphs have no plate: a transparent layer of the glyph pixels, recoloured
+# FO3 / FNV icons are filled plates: a square copy of the map around the icon with its colour rotated (degrees, half size)
+HUE_TINT = {"fo3": (-100, 14), "fnv": (155, 14)}  # green -> amber, amber -> cyan
+UNDISCOVERED = {"fo3": (255, 176, 64), "fnv": (80, 215, 255), "fo4": (255, 176, 64)}  # colour of the icons to discover
 GROUP_COLOR = {"fo3": (110, 255, 130), "fnv": (255, 186, 96)}  # glyph / tint colour of the maps without baked icons
 # Where the "discover the map" mode starts (marker name): the game's starting vault or town, or the DLC entry point
 START = {
@@ -122,10 +126,9 @@ def fetch_file(cache, title):
     return path
 
 
-def make_clean(im, markers, radius, contrast):
-    """The map without its baked-in icons (needs opencv-python-headless): inpaint around every marker.
-    With a `contrast` only the glyph pixels (brighter than their surroundings by that much) are wiped, which keeps
-    roads and terrain. Not used for FO76: its painted pictograms cannot be inpainted, the discovery mode covers them."""
+def make_glyphs(im, markers, radius, contrast, color):
+    """Transparent layer holding only the baked-in icon pixels around each marker, in a flat `color`
+    (needs opencv-python-headless). Drawn over the untouched map it recolours the icon."""
     import cv2
     import numpy as np
     a = np.asarray(im.convert("RGB"))[:, :, ::-1].copy()
@@ -134,8 +137,10 @@ def make_clean(im, markers, radius, contrast):
         cv2.circle(discs, (round(k["x"] / 1000 * im.width), round(k["y"] / 1000 * im.height)), round(radius / 1000 * im.width), 255, -1)
     gray = cv2.cvtColor(a, cv2.COLOR_BGR2GRAY)
     glyph = ((gray.astype(int) - cv2.medianBlur(gray, 41).astype(int)) > contrast).astype(np.uint8) * 255
-    mask = cv2.dilate(cv2.bitwise_and(glyph, discs), np.ones((3, 3), np.uint8), iterations=2)
-    return Image.fromarray(cv2.inpaint(a, mask, 3, cv2.INPAINT_TELEA)[:, :, ::-1])
+    alpha = cv2.dilate(cv2.bitwise_and(glyph, discs), np.ones((3, 3), np.uint8), iterations=1)  # cover antialiased edges
+    rgba = np.zeros(a.shape[:2] + (4,), np.uint8)
+    rgba[:, :, 0], rgba[:, :, 1], rgba[:, :, 2], rgba[:, :, 3] = color[0], color[1], color[2], alpha
+    return Image.fromarray(rgba, "RGBA")
 
 
 def duotone(im, lo=(2, 10, 4), hi=(96, 255, 120)):  # lo/hi: dark and bright colour of the tinted map
@@ -181,8 +186,9 @@ def central_glyph(a):
 def extract_fo4_icons(im, markers):
     """Returns {colour name: {FO4 category: path}}."""
     icons = {}
-    for cname, color in (("green", GROUP_COLOR["fo3"]), ("amber", GROUP_COLOR["fnv"])):
-        icons[cname] = _extract_fo4_icons(im, markers, color, "" if cname == "green" else "-amber")
+    for cname, color, suffix in (("green", GROUP_COLOR["fo3"], ""), ("amber", GROUP_COLOR["fnv"], "-amber"),
+                                 ("cyan", UNDISCOVERED["fnv"], "-cyan")):
+        icons[cname] = _extract_fo4_icons(im, markers, color, suffix)
     return icons
 
 
@@ -248,11 +254,12 @@ def main():
         dst = f"img/maps/{g}.webp"
         im.save(os.path.join(ROOT, dst), "WEBP", quality=80 if g != "fo76" else 74, method=6)
 
-        icons = {}
-        if tint and not baked:  # tinted wiki maps carry no icons: draw FO4 glyphs
+        icons, icons_undisc = {}, {}
+        if tint and not baked:  # tinted wiki maps carry no icons: draw FO4 glyphs (and a recoloured set for undiscovered places)
             for c in m["categories"]:
                 if c["name"] in FO4_ICON_FOR:
                     icons[c["id"]] = fo4_icons["amber" if group == "fnv" else "green"][FO4_ICON_FOR[c["name"]]]
+                    icons_undisc[c["id"]] = fo4_icons["cyan" if group == "fnv" else "amber"][FO4_ICON_FOR[c["name"]]]
 
         names = {}
         for x in m["markers"]:
@@ -298,12 +305,17 @@ def main():
         pad = 50 if g in ("fo3", "fnv", "fo4") else 90
         bbox = [0, 0, 1000, 1000] if g == "fo76" else [max(0, min(xs) - pad), max(0, min(ys) - pad), min(1000, max(xs) + pad), min(1000, max(ys) + pad)]
         start = next(k["id"] for k in markers if k["name"].strip() == START[g])
-        clean = None
+        glyphs = None
         if g in GLYPH_CONTRAST:
-            clean = f"img/maps/{g}-clean.webp"
-            make_clean(im, markers, ICON_RADIUS[g] + 2, GLYPH_CONTRAST[g]).save(os.path.join(ROOT, clean), "WEBP", quality=80, method=6)
+            glyphs = f"img/maps/{g}-glyphs.webp"
+            make_glyphs(im, markers, ICON_RADIUS[g] + 2, GLYPH_CONTRAST[g], UNDISCOVERED[g]).save(
+                os.path.join(ROOT, glyphs), "WEBP", lossless=True, method=6)
+        for old in ("fo3", "fnv"):  # leftovers of a previous method
+            if g == old and os.path.exists(os.path.join(ROOT, f"img/maps/{g}-glyphs.webp")):
+                os.remove(os.path.join(ROOT, f"img/maps/{g}-glyphs.webp"))
+        hue = HUE_TINT.get(g)
         out[g] = {
-            "start": start, "clean": clean, "patch": ICON_RADIUS.get(g, 0) + 2, "label": label, "group": group, "short": short, "image": dst, "hit": hit, "bbox": [round(v) for v in bbox], "icons": icons,
+            "start": start, "glyphs": glyphs, "hue": hue, "patch": ICON_RADIUS.get(g, 0) + 2, "label": label, "group": group, "short": short, "image": dst, "hit": hit, "bbox": [round(v) for v in bbox], "icons": icons, "icons_undisc": icons_undisc,
             "cats": {c["id"]: c["name"] for c in m["categories"]},
             "markers": [{k: v for k, v in mk.items() if k != "cid"} | {"c": mk["cid"]} for mk in markers],
             "targets": targets,
