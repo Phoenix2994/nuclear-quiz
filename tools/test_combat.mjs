@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { newFight, playerFrom, playerShot, creatureTurn, hitChance, fleeInfo, tryFlee, pickCreature, maxShots, bodyOf, zonesFor,
-  ADV, newAdventure, advAfterFight, advAfterDiscover, rest, canRest, buyStim, fastTravel, useStimpak, isSafePlace, winCaps } from "../assets/pipboy-map.js";
+  ADV, WEAPONS, AMMO, armed, needsBash, withKit, buyWeapon, buyAmmo, equip, newAdventure, advAfterFight, advAfterDiscover, rest, canRest, buyStim, fastTravel, useStimpak, isSafePlace, winCaps } from "../assets/pipboy-map.js";
 
 const creatures = JSON.parse(readFileSync(new URL("../data/creatures.json", import.meta.url), "utf8"));
 const find = (g, name) => creatures[g].find((c) => c.name === name);
@@ -138,7 +138,7 @@ const part = (f, key) => f.c.parts.find((p) => p.key === key);
 // 12. ADVENTURE: health, stimpaks, caps and position carried between missions
 {
   let a = newAdventure(60, "vault", 4);
-  assert.deepEqual(a, { hp: 60, stim: 2, caps: 40, at: "vault", safe: "vault" });
+  assert.deepEqual(a, { hp: 60, stim: 2, caps: 40, at: "vault", safe: "vault", weapons: ["knife", "pistol"], equip: "pistol", ammo: { "10mm": 20 } });
   // a fight starts with the health you bring; a stimpak heals 40% of max health for the AP of one shot
   const f = newFight(find("fo3", "Radroach"), rookie, 20, a.stim);
   assert.equal(f.p.hp, 20);
@@ -149,7 +149,8 @@ const part = (f, key) => f.c.parts.find((p) => p.key === key);
   assert.equal(r.gain, winCaps(3, 0.5)); assert.equal(r.gain, 14);
   a = r.a; assert.equal(a.hp, 35); assert.equal(a.stim, 1); assert.equal(a.caps, 54);
   // discovering a settlement moves you there and makes it the place you wake up at
-  r = advAfterDiscover(a, "megaton", true, () => 0.1);
+  r = advAfterDiscover(a, "megaton", true, () => 0.1); // 0.1: a stimpak and a pack of 10mm rounds found
+  assert.deepEqual(r.loot, { type: "10mm", n: 10 }); assert.equal(r.a.ammo["10mm"], 30);
   a = r.a; assert.equal(a.caps, 64); assert.equal(a.stim, 2); assert.equal(a.at, "megaton"); assert.equal(a.safe, "megaton");
   a = advAfterDiscover(a, "ruins", false, () => 0.9).a;
   assert.equal(a.at, "ruins"); assert.equal(a.safe, "megaton"); assert.equal(a.stim, 2);
@@ -166,9 +167,42 @@ const part = (f, key) => f.c.parts.find((p) => p.key === key);
   a = buyStim(a); assert.deepEqual([a.stim, a.caps], [1, 21]);
   assert.equal(buyStim(a), a); // not enough caps
   a = fastTravel({ ...a, hp: 10 }, "vault"); assert.equal(rest(a, 60, "vault").caps, 21);
+  // shop: a weapon once, ammo packs; a fight gives back the rounds left
+  a = { ...a, caps: 200 };
+  a = buyWeapon(a, "shotgun"); assert.deepEqual([a.weapons.includes("shotgun"), a.caps], [true, 80]);
+  assert.equal(buyWeapon(a, "shotgun"), a); assert.equal(buyWeapon(a, "plasma"), a); // owned / too expensive
+  a = buyAmmo(a, "shell"); assert.deepEqual([a.ammo.shell, a.caps], [6, 65]);
+  a = advAfterFight(equip(a, "shotgun"), { result: "flee", hp: 20, stim: 1, ammo: { shell: 3 } }, 60, () => 0.9).a;
+  assert.deepEqual([a.equip, a.ammo.shell, a.ammo["10mm"]], ["shotgun", 3, 30]);
+  assert.equal(withKit({ hp: 5 }).equip, "pistol");
   const map = { start: "v" };
   assert.ok(isSafePlace(map, { id: "v", cat: "Vaults" }) && isSafePlace(map, { id: "x", cat: "Medium settlements" }) && isSafePlace(map, { id: "y", cat: "Towns" }));
   assert.ok(!isSafePlace(map, { id: "z", cat: "Caves" }) && !isSafePlace(map, { id: "w", cat: "Town Ruins" }));
   log("12. adventure: caps", a.caps, "stimpaks", a.stim, "encounter chance", ADV.encounter);
+}
+
+// 13. WEAPONS: AP, damage, accuracy and ammo; out of ammo a gun bash (2 AP, no rounds)
+{
+  const roach = find("fo3", "Radroach");
+  const pistol = newFight(roach, armed(rookie, "pistol", 1)), rifle = newFight(roach, armed(rookie, "rifle", 5));
+  assert.equal(pistol.p.dmg, rookie.dmg); assert.equal(rifle.p.cost, 4); assert.equal(rifle.p.dmg, Math.round(rookie.dmg * 2.2));
+  assert.equal(hitChance(rifle, part(rifle, "torso")), hitChance(pistol, part(pistol, "torso")) + 10);
+  const knife = armed({ ...rookie, str: 5 }, "knife");
+  assert.equal(knife.ammo, null); assert.equal(knife.dmg, Math.round(rookie.dmg * 0.8) + 10);
+  // the pistol has one round: one shot, then a bash
+  const f = newFight(find("fnv", "Deathclaw"), armed(rookie, "pistol", 1));
+  let r = playerShot(f, "torso", false, dice(0, 0.5));
+  assert.ok(!r.bash); assert.equal(f.p.ammo, 0); assert.equal(f.p.ap, 6);
+  assert.ok(needsBash(f.p));
+  r = playerShot(f, "torso", false, dice(0, 0.5));
+  assert.ok(r.bash); assert.equal(f.p.ammo, 0); assert.equal(f.p.ap, 4);
+  // a minigun burst takes 5 rounds; energy weapons ignore part of the damage resistance
+  const mg = newFight(roach, armed(rookie, "minigun", 7));
+  playerShot(mg, "torso", false, dice(0, 0.5)); assert.equal(mg.p.ammo, 2); assert.ok(needsBash(mg.p));
+  const armour = { ...roach, hp: 500, absorb: 0.5 };
+  const laser = newFight(armour, armed(rookie, "laser", 10)), pist = newFight(armour, armed(rookie, "pistol", 10));
+  const hitL = playerShot(laser, "torso", false, dice(0, 0.5)).dmg, hitP = playerShot(pist, "torso", false, dice(0, 0.5)).dmg;
+  log("13. weapons: laser vs armour", hitL, "| pistol vs armour", hitP, "| weapons", Object.keys(WEAPONS).length, "ammo types", Object.keys(AMMO).length);
+  assert.ok(hitL > hitP * 1.5);
 }
 console.log("combat engine: all battles ok");

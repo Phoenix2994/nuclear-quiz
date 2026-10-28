@@ -14,6 +14,7 @@ dropping the bundle patch.
 | `data/maps.json` | Markers, coordinates, targets, icon paths for FO3 / FNV / FO4 / FO76 (generated) | Copy to the app's static/public folder |
 | `img/maps/*.webp`, `img/maps/icons/*.png` | Map images and marker glyphs (generated) | Copy to static/public |
 | `tools/build_maps.py` | Regenerates the two rows above from the Fallout Wiki | Keep in repo (`python3 tools/build_maps.py`, needs `curl`, Pillow and `opencv-python-headless`) |
+| `img/weapons/*.webp`, `tools/build_weapons.py` | Weapon pictures of the adventure (Fallout Wiki) | Copy to static/public |
 | `img/quiz-icons/*.png`, `tools/build_icon_questions.py` | Clean map icons and the "what kind of place does this icon mark?" questions (ids `icon-*`) appended to `data/questions-*.json` | Rerun the script after rebuilding the question banks |
 | `tools/sources/*.jpg` | In-game Pip-Boy maps with icons for FO3 and FNV (input of the build script) | Keep with the tool |
 | `data/place-facts.json` | One curiosity (EN + IT) per place that has one: 105 places (generated) | Copy to static/public |
@@ -242,4 +243,13 @@ engine (`ADV`, `newAdventure`, `advAfterFight`, `advAfterDiscover`, `rest`, `buy
 - Discovered place: +10 caps, 25% chance of a stimpak (max 10); you move there.
 - Settlements (settlement / city / town categories, plus the starting vault; `SAFE_CAT`): marked with a square. Tap one
   to fast travel (free); in the one you are in: rest to full health (10 caps, free in the vault), buy a stimpak (25 caps).
+- Weapons (phase 2, `WEAPONS` / `AMMO`, one set for every game): combat knife and 10mm pistol (20 rounds) to start;
+  combat shotgun 120, hunting rifle 180, super sledge 250, laser rifle 300, minigun 450, plasma rifle 500 caps. Each has
+  AP per shot, a damage multiplier, a hit chance bonus, an ammo type (melee: none, Strength counts twice), rounds per
+  shot (minigun 5), and energy weapons ignore part of the damage resistance (`armed`, `through`). The weapon is chosen
+  on the fight's intro screen (not during the fight). Out of ammo a gun is used to bash: 2 AP, half the base damage
+  plus Strength, +10% to hit (`needsBash`). Ammo is fairly rare: a pack after 35% of the won fights and in 15% of the
+  discovered places (`lootAmmo`), or bought at the settlements' shop (packs and prices in `AMMO`). Action points are
+  shown one pip per point. Pictures: `img/weapons/` from the Fallout Wiki (`tools/build_weapons.py`). Saved adventures
+  without weapons get the starting kit (`withKit`).
 - Test hook: `window.__PM.encounter` forces (true) or skips (false) the creature; with `creature` set it is always met.
