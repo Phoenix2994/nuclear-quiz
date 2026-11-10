@@ -12,6 +12,17 @@ Questo branch contiene il **sorgente** (React 18 + Vite + TypeScript). Il sito p
 
 `public/data` (JSON) e `public/img` (immagini) sono serviti come asset statici.
 
-## Migrazione ad app nativa (Capacitor)
-Piano: 1 fondamenta, 2 offline e asset locali, 3 guscio Capacitor, 4 storage persistente, 5 UX da app, 6 build/test Android, 7 pronta per gli store.
-Target: Android per primo; distribuzione personale, store in futuro.
+## App Android (Capacitor)
+Id: `com.phoenix2994.wastelandquiz` - minSdk 22, targetSdk 34.
+
+- `npm run android:debug` - build web + sync + APK in `android/app/build/outputs/apk/debug/app-debug.apk` (richiede JDK 17+ e Android SDK, `ANDROID_HOME`)
+- `npm run assets` - rigenera icone e splash da `assets/` (trifoglio originale)
+- Su GitHub, l'azione **Android APK** produce l'APK come artifact a ogni push.
+
+**Firma release (non e in git):** crea un keystore e `android/keystore.properties` con `storeFile`, `storePassword`, `keyAlias`, `keyPassword`:
+`keytool -genkeypair -v -keystore wq.keystore -alias wq -keyalg RSA -keysize 2048 -validity 10000`
+poi `npm run android:release` (APK + AAB). Conserva il keystore: serve per ogni aggiornamento.
+
+**Nativo:** progressi salvati in localStorage e duplicati in SharedPreferences (`src/native.ts`, con ripristino); tasto indietro (da un'altra scheda torna al quiz, dal quiz esce); aptica su risposta giusta/sbagliata.
+
+**Asset di terzi:** suoni in `public/sounds`; le immagini del wiki sono ancora in hotlink e passano da `img()` in `src/assets.ts` (`IMG_OVERRIDES`) per poterle sostituire prima di un eventuale rilascio negli store.
