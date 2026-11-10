@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Wasteland Quiz</string>
+    <string name="title_activity_main">Wasteland Quiz</string>
+    <string name="package_name">com.phoenix2994.wastelandquiz</string>
+    <string name="custom_url_scheme">com.phoenix2994.wastelandquiz</string>
+</resources>
