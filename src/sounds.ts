@@ -1,10 +1,10 @@
-// Effetti sonori: file della wiki mostrati direttamente (come le immagini), niente copie nel repository.
-const BASE = 'https://static.wikia.nocookie.net/fallout/images';
+// Effetti sonori: file locali in public/sounds (vedi assets.ts).
+import { soundUrl } from './assets';
 const FILES = {
-  right: `${BASE}/c/ca/Ui_karma_up.ogg/revision/latest`,
-  wrong: `${BASE}/3/3f/Ui_karma_down.ogg/revision/latest`,
-  caps: `${BASE}/6/6b/Ui_items_bottlecaps_down_01.ogg/revision/latest`,
-  open: `${BASE}/c/cd/Ui_pimpboy.ogg/revision/latest`,
+  right: soundUrl('right'),
+  wrong: soundUrl('wrong'),
+  caps: soundUrl('caps'),
+  open: soundUrl('open'),
 } as const;
 export type SoundName = keyof typeof FILES;
 

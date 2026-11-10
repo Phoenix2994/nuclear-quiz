@@ -5,6 +5,7 @@ import { useT } from '../i18n';
 import { useStore } from '../store';
 import '../topics.css';
 import { TopicRadar } from './TopicRadar';
+import { img } from '../assets';
 
 const FALLBACK_IMG = `${import.meta.env.BASE_URL}img/vaultboy-walk.png`;
 
@@ -39,7 +40,7 @@ export function TopicsTab() {
           <section className="panel topic-card" key={tipo}>
             <img
               className="topic-img"
-              src={info?.img || FALLBACK_IMG}
+              src={img(info?.img) || FALLBACK_IMG}
               alt=""
               referrerPolicy="origin"
               loading="lazy"

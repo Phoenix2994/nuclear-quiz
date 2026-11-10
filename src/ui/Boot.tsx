@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { GAME_LABEL } from '../game/config';
 import type { Lang } from '../types';
+import { img } from '../assets';
 
 export interface Trivia {
   title: string;
@@ -32,7 +33,7 @@ export function Boot({ pct, trivia, lang }: { pct: number; trivia: Trivia[]; lan
       {cur && (
         <div className="boot-card" key={i}>
           <div className="boot-kicker">{txt.did}</div>
-          <img className="boot-img" src={cur.img} alt="" referrerPolicy="origin" loading="eager" onError={() => setI((x) => x + 1)} />
+          <img className="boot-img" src={img(cur.img)} alt="" referrerPolicy="origin" loading="eager" onError={() => setI((x) => x + 1)} />
           <div className="boot-title">{cur.title}</div>
           <div className="boot-meta">{[txt.tipo[cur.tipo] ?? cur.tipo, GAME_LABEL[cur.game]].filter(Boolean).join(' · ')}</div>
           <p className="boot-fact">{cur.fact}</p>

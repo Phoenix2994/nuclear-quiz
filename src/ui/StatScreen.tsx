@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { freePoints, MAX_STAT, SPECIAL_INFO, SPECIAL_KEYS, SPECIAL_NAMES, statProgress, statValue } from '../game/special';
 import { useT } from '../i18n';
 import type { Lang, SpecialKey } from '../types';
+import { img as assetImg } from '../assets';
 
 type Sub = 'status' | 'special' | 'topics' | 'config';
 
@@ -143,7 +144,7 @@ export function StatScreen() {
             );
           })}
           <div className="sp-detail">
-            {img && <img src={img} alt="" referrerPolicy="origin" />}
+            {img && <img src={assetImg(img)} alt="" referrerPolicy="origin" />}
             <div>
               <strong>{SPECIAL_NAMES[sel]}</strong>
               <p className="muted">{info.desc}</p>

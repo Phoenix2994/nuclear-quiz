@@ -6,6 +6,7 @@ import { useStore } from '../store';
 import { useT } from '../i18n';
 import { QuizSession } from './QuizSession';
 import { LockIcon } from './Icons';
+import { img } from '../assets';
 
 /** Tab QUIZ: percorso a lezioni per gioco, sbloccate in sequenza. */
 export function PathScreen() {
@@ -98,7 +99,7 @@ export function PathScreen() {
       </header>
       {lessons[unlockedUpTo] && (
         <div className="pb-detail">
-          {deco.length > 0 && <img src={deco[(unlockedUpTo + gameShift * 5) % deco.length].img} alt="" referrerPolicy="origin" />}
+          {deco.length > 0 && <img src={img(deco[(unlockedUpTo + gameShift * 5) % deco.length].img)} alt="" referrerPolicy="origin" />}
           <div>
             <strong>{t('lessonLabel', { n: unlockedUpTo + 1 })}</strong>
             <p className="muted">{mix ? t('mixGames', { n: selected.length }) : gameInfo.label}</p>

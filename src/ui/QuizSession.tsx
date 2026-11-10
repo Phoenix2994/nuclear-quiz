@@ -6,6 +6,7 @@ import { play } from '../sounds';
 import { GAME_LABEL } from '../game/config';
 import { useT } from '../i18n';
 import type { I18nKey } from '../i18n';
+import { img } from '../assets';
 
 export interface SessionResult {
   correct: number;
@@ -176,8 +177,8 @@ export function QuizSession({ title, questions, onExit, onFinish }: Props) {
         </figure>
       )}
       {q.img && (
-        <figure className="hero" onClick={() => setZoom(q.img!)}>
-          <img src={q.img} alt="" referrerPolicy="origin" loading="eager" />
+        <figure className="hero" onClick={() => setZoom(img(q.img!))}>
+          <img src={img(q.img)} alt="" referrerPolicy="origin" loading="eager" />
           {answered && (
             <button
               className="report"

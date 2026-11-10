@@ -3,6 +3,7 @@ import type { Article, GameKey, TipoKey } from '../types';
 import { GAME_LABEL, GAMES, TEMI } from '../game/config';
 import { useStore } from '../store';
 import { useT } from '../i18n';
+import { img } from '../assets';
 
 const shortOf = (a: Article) => a.giochi.map((g) => GAMES.find((x) => x.key === g)?.short ?? g).join(' ');
 
@@ -104,7 +105,7 @@ export function DataScreen() {
           {unlockedSel ? (
             <>
               <div className="data-text">
-                {sel.img && <img className="entry-img" src={sel.img} alt="" referrerPolicy="origin" />}
+                {sel.img && <img className="entry-img" src={img(sel.img)} alt="" referrerPolicy="origin" />}
                 <p>{sel.intro.replace(/ +([.,;:!?])/g, '$1')}</p>
               </div>
               <div className="data-actions">
