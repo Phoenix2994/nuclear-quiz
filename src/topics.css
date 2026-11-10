@@ -1,0 +1,15 @@
+/* Sezione Topic della scheda STAT: radar e schede, nello stile Pip-Boy del resto dell'app. */
+.topic-radar { width: 100%; max-width: 380px; display: block; margin: 0 auto; }
+.tr-ring { fill: none; stroke: var(--fg-faint); stroke-width: 1; }
+.tr-axis { stroke: var(--fg-faint); stroke-width: 1; opacity: .6; }
+.tr-shape { fill: rgba(120, 255, 100, .22); stroke: var(--fg); stroke-width: 2; filter: drop-shadow(0 0 4px rgba(120, 255, 100, .7)); }
+.tr-dot { fill: var(--fg); filter: drop-shadow(0 0 3px var(--fg)); }
+.tr-label { fill: var(--fg-dim); font-family: var(--font); font-size: 10px; letter-spacing: .04em; }
+.tr-label.off { opacity: .45; }
+
+.topic-card { display: flex; gap: 12px; align-items: flex-start; }
+.topic-img { width: 72px; height: 72px; flex: none; object-fit: contain; border: 1px solid var(--line); background: rgba(0, 0, 0, .35); filter: sepia(0.2) saturate(1.1); }
+.topic-body { min-width: 0; flex: 1; }
+.topic-body .subtitle { margin: 0 0 4px; }
+.topic-badge { display: inline-block; max-width: 100%; margin: 0 0 4px; padding: 1px 6px; border: 1px solid var(--fg); color: var(--fg); overflow-wrap: anywhere; }
+.topic-body p { overflow-wrap: anywhere; }
