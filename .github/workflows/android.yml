@@ -1,0 +1,22 @@
+name: Android APK
+on:
+  push:
+    branches: [ccr-8a255620-d7tbr8]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - run: npm test
+      - run: npm run android:debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasteland-quiz-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk

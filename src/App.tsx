@@ -11,6 +11,7 @@ import { useT } from './i18n';
 import { loadProgress } from './game/progress';
 import { Boot, type Trivia } from './ui/Boot';
 import { MapTab } from './features/map/MapTab';
+import { appReady } from './native';
 
 type Tab = 'quiz' | 'radio' | 'data' | 'map' | 'stat';
 
@@ -57,6 +58,17 @@ function Shell() {
     { key: 'map', label: t('tabMap') },
     { key: 'stat', label: t('tabStat') },
   ];
+  // Tasto indietro di Android: da un'altra scheda si torna al quiz, dal quiz si esce
+  useEffect(() => {
+    const onBack = (e: Event) => {
+      if (tab !== 'quiz') {
+        e.preventDefault();
+        setTab('quiz');
+      }
+    };
+    window.addEventListener('native-back', onBack);
+    return () => window.removeEventListener('native-back', onBack);
+  }, [tab]);
   return (
     <div className="app">
       <nav className="tabs">
@@ -99,6 +111,7 @@ export function App() {
   const [pct, setPct] = useState(0);
   const [trivia, setTrivia] = useState<Trivia[]>([]);
   const settings = useRef(loadProgress().settings).current;
+  useEffect(appReady, []); // lo splash nativo sparisce appena parte la schermata di caricamento
 
   useEffect(() => {
     const base = import.meta.env.BASE_URL + 'data/';

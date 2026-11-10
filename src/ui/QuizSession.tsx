@@ -7,6 +7,7 @@ import { GAME_LABEL } from '../game/config';
 import { useT } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { img } from '../assets';
+import { storeSet } from '../native';
 
 export interface SessionResult {
   correct: number;
@@ -110,7 +111,7 @@ export function QuizSession({ title, questions, onExit, onFinish }: Props) {
   function report(id: string) {
     try {
       const list: string[] = JSON.parse(localStorage.getItem(REPORT_KEY) ?? '[]');
-      if (!list.includes(id)) localStorage.setItem(REPORT_KEY, JSON.stringify([...list, id]));
+      if (!list.includes(id)) storeSet(REPORT_KEY, JSON.stringify([...list, id]));
     } catch {
       /* storage non disponibile */
     }

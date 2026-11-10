@@ -1,3 +1,4 @@
+import { storeSet } from "../../native";
 // Map quizzes for Fallout 3, New Vegas, 4 and 76 (plus the DLC maps).
 //
 // Modes: find the place (scored by distance), which place is this, discover the map (fog of war that lifts as you
@@ -165,7 +166,7 @@ function loadSaved() {
   } catch { return { discovered: {}, best: {}, adv: {} }; }
 }
 function saveSaved(s) {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch { /* private mode */ }
+  try { storeSet(STORE_KEY, JSON.stringify(s)); } catch { /* private mode */ }
 }
 
 

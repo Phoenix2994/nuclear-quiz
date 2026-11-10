@@ -1,6 +1,7 @@
 import type { Progress, Question } from '../types';
 import { CONFIG } from './config';
 import { addPoints, answerPoints, emptySpecial } from './special';
+import { storeSet } from '../native';
 
 export const STORAGE_KEY = 'wasteland-quiz-progress-v2';
 
@@ -107,7 +108,7 @@ export function loadProgress(): Progress {
 
 export function saveProgress(p: Progress): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+    storeSet(STORAGE_KEY, JSON.stringify(p));
   } catch {
     /* storage non disponibile: si gioca comunque */
   }

@@ -1,5 +1,6 @@
 // Effetti sonori: file locali in public/sounds (vedi assets.ts).
 import { soundUrl } from './assets';
+import { haptic } from './native';
 const FILES = {
   right: soundUrl('right'),
   wrong: soundUrl('wrong'),
@@ -18,7 +19,9 @@ export function setSoundEnabled(on: boolean) {
 
 /** Riproduce un suono; ogni errore (rete, formato, blocco del browser) viene ignorato. */
 export function play(name: SoundName) {
-  if (!enabled || typeof Audio === 'undefined') return;
+  if (!enabled) return;
+  if (name === 'right' || name === 'wrong') haptic(name);
+  if (typeof Audio === 'undefined') return;
   try {
     let a = cache.get(name);
     if (!a) {
