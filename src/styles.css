@@ -302,3 +302,7 @@ input, textarea, button, select { text-transform: uppercase; }
 .quiz .hero.mapview img { width: 450%; height: auto; max-height: none; object-fit: initial; }
 .quiz.answered .hero.mapview { flex: 0 0 120px; height: 120px; }
 .mappin { position: absolute; left: 50%; top: 50%; width: 0; height: 0; margin: 22px 0 0 -9px; border: 9px solid transparent; border-bottom: 18px solid #ff3c28; border-top: 0; filter: drop-shadow(0 0 3px #000) drop-shadow(0 0 8px #ff3c28); }
+
+/* Notch e bordi arrotondati (iOS, e Android con gesture): le schede restano sotto la barra di stato */
+.app { padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.boot { padding-top: calc(16px + env(safe-area-inset-top)); }

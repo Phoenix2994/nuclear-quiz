@@ -1,0 +1,22 @@
+name: iOS build (simulatore)
+on:
+  push:
+    branches: [ccr-8a255620-d7tbr8]
+    paths: ['ios/**', 'src/**', 'public/**', 'package*.json', 'capacitor.config.ts', '.github/workflows/ios.yml']
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx cap sync ios
+      - name: Compila per simulatore (senza firma)
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphonesimulator \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -30

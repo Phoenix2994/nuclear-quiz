@@ -26,3 +26,13 @@ poi `npm run android:release` (APK + AAB). Conserva il keystore: serve per ogni 
 **Nativo:** progressi salvati in localStorage e duplicati in SharedPreferences (`src/native.ts`, con ripristino); tasto indietro (da un'altra scheda torna al quiz, dal quiz esce); aptica su risposta giusta/sbagliata.
 
 **Asset di terzi:** suoni in `public/sounds`; le immagini del wiki sono ancora in hotlink e passano da `img()` in `src/assets.ts` (`IMG_OVERRIDES`) per poterle sostituire prima di un eventuale rilascio negli store.
+
+## App iOS (Capacitor)
+Stesso id (`com.phoenix2994.wastelandquiz`), iOS 13+. Il progetto e in `ios/` (CocoaPods). **Non e mai stato compilato su Mac dal sandbox**: l'azione GitHub *iOS build (simulatore)* lo verifica a ogni push.
+
+Su un Mac con Xcode e CocoaPods:
+1. `npm ci && npm run ios:open` (build web + sync + `pod install` + apre Xcode)
+2. in Xcode: target **App** > *Signing & Capabilities* > scegli il tuo Team (account Apple Developer)
+3. collega l'iPhone e premi Run, oppure *Product > Archive* per TestFlight / App Store.
+
+Note: i suoni sono `.m4a` (iOS non legge `.ogg`); la barra di stato segue lo stile scuro; le aree sicure (notch) sono gestite in CSS con `env(safe-area-inset-*)`.
